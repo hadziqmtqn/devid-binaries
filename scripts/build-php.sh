@@ -45,13 +45,18 @@ cp buildroot/bin/php buildroot/bin/php-fpm "$STAGE/"
 cp buildroot/modules/xdebug.so buildroot/modules/pcov.so "$STAGE/modules/"
 ./spc dump-license --for-extensions="$EXT,$SHARED" --dump-dir="$STAGE/LICENSES"
 
-# Checks that must hold for every shipped build.
-if otool -L "$STAGE/php" "$STAGE/php-fpm" "$STAGE"/modules/*.so | grep -q /usr/local; then
-  echo "FAIL: links Homebrew (/usr/local) libraries" >&2; otool -L "$STAGE/php"; exit 1
+# Checks that must hold for every shipped build. Capture output first: with pipefail,
+# `cmd | grep -q` fails when grep exits early and cmd gets SIGPIPE, which made these checks
+# flaky in CI and could hide a /usr/local link.
+links="$(otool -L "$STAGE/php" "$STAGE/php-fpm" "$STAGE"/modules/*.so)"
+if grep -q /usr/local <<<"$links"; then
+  echo "FAIL: links Homebrew (/usr/local) libraries" >&2; echo "$links" >&2; exit 1
 fi
-"$STAGE/php" -n -d zend_extension="$STAGE/modules/xdebug.so" -v | grep -q Xdebug || { echo "FAIL: xdebug.so does not load" >&2; exit 1; }
+version="$("$STAGE/php" -n -d zend_extension="$STAGE/modules/xdebug.so" -v)"
+grep -q Xdebug <<<"$version" || { echo "FAIL: xdebug.so does not load" >&2; exit 1; }
+modules="$("$STAGE/php" -n -m)"
 for ext in pdo_pgsql pdo_sqlite intl gd redis sodium zip bcmath; do
-  "$STAGE/php" -n -m | grep -qx "$ext" || { echo "FAIL: missing extension $ext" >&2; exit 1; }
+  grep -qx "$ext" <<<"$modules" || { echo "FAIL: missing extension $ext" >&2; exit 1; }
 done
 
 codesign --force --sign - "$STAGE/php" "$STAGE/php-fpm" "$STAGE"/modules/*.so   # ad-hoc (D-010)
