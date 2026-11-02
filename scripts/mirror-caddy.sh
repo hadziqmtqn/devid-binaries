@@ -4,7 +4,7 @@
 #   scripts/mirror-caddy.sh   -> dist/caddy-<ver>-darwin-x86_64.tar.gz (caddy + LICENSES/ + BUILDINFO)
 set -euo pipefail
 
-CADDY_VER="${CADDY_VER:-2.11.7}"
+CADDY_VER="${CADDY_VER:-$(python3 "$(dirname "$0")/upstream.py" caddy)}"   # newest release unless pinned
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="${WORK:-$ROOT/work}/caddy"
 DIST="${DIST:-$ROOT/dist}"

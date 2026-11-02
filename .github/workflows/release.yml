@@ -1,6 +1,6 @@
 name: Build and release
 
-# Manual for now (R1). A weekly upstream check comes in R5.
+# Manual, or dispatched by check-upstream.yml when PHP, nginx or Caddy has a newer release.
 on:
   workflow_dispatch:
     inputs:
@@ -55,6 +55,8 @@ jobs:
           key: nginx-${{ hashFiles('scripts/build-nginx.sh', 'scripts/fetch-spc.sh') }}
           restore-keys: nginx-
       - run: scripts/build-nginx.sh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}   # upstream.py: avoid the anonymous API rate limit
       - uses: actions/upload-artifact@v7
         with:
           name: nginx
@@ -68,6 +70,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: scripts/mirror-caddy.sh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/upload-artifact@v7
         with:
           name: caddy
