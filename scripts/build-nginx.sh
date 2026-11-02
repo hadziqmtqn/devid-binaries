@@ -51,10 +51,13 @@ cp LICENSE "$STAGE/LICENSES/nginx.txt"
 cp "../pcre2-$PCRE2_VER/LICENCE.md" "$STAGE/LICENSES/pcre2.md" 2>/dev/null || cp "../pcre2-$PCRE2_VER/LICENCE" "$STAGE/LICENSES/pcre2.txt"
 (cd "$WORK" && ./spc dump-license --for-libs=openssl,zlib --without-php --dump-dir="$STAGE/LICENSES/libs")
 
-if otool -L "$STAGE/nginx" | grep -q /usr/local; then
-  echo "FAIL: links Homebrew (/usr/local) libraries" >&2; otool -L "$STAGE/nginx"; exit 1
+# Capture first: `cmd | grep -q` under pipefail fails on SIGPIPE (see build-php.sh).
+links="$(otool -L "$STAGE/nginx")"
+if grep -q /usr/local <<<"$links"; then
+  echo "FAIL: links Homebrew (/usr/local) libraries" >&2; echo "$links" >&2; exit 1
 fi
-"$STAGE/nginx" -V 2>&1 | grep -q "nginx/$NGINX_VER" || { echo "FAIL: nginx -V" >&2; exit 1; }
+info="$("$STAGE/nginx" -V 2>&1)"
+grep -q "nginx/$NGINX_VER" <<<"$info" || { echo "FAIL: nginx -V" >&2; exit 1; }
 
 codesign --force --sign - "$STAGE/nginx"   # ad-hoc (Devid D-010)
 {

@@ -1,0 +1,15 @@
+# Keep the workflow's actions current (the first run warned that checkout@v4 and cache@v4
+# still target the deprecated Node.js 20). PHP/nginx/spc versions are pinned in scripts/.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Jakarta
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
