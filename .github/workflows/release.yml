@@ -61,8 +61,21 @@ jobs:
           path: dist/*.tar.gz
           if-no-files-found: error
 
+  caddy:
+    # Mirrors the official build (no compile), so Linux is enough.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/mirror-caddy.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: caddy
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
   release:
-    needs: [php, nginx]
+    needs: [php, nginx, caddy]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -85,4 +98,4 @@ jobs:
         run: |
           gh release create "$TAG" dist/*.tar.gz dist/manifest.json dist/checksums.txt \
             --title "$TAG" \
-            --notes "Static PHP 8.3/8.4/8.5 and nginx for Devid (macOS x86_64). See manifest.json; verify with checksums.txt."
+            --notes "Static PHP 8.3/8.4/8.5, nginx and a mirror of the official Caddy for Devid (macOS x86_64). See manifest.json; verify with checksums.txt."

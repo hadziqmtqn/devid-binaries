@@ -13,6 +13,7 @@ Prebuilt binaries for **Devid**, a personal local PHP development tool for macOS
 |---|---|
 | `php-<version>-darwin-x86_64.tar.gz` | `php`, `php-fpm`, `modules/xdebug.so`, `modules/pcov.so`, `LICENSES/`, `BUILDINFO` |
 | `nginx-<version>-darwin-x86_64.tar.gz` | `nginx` (OpenSSL, zlib and PCRE2 linked statically), `LICENSES/`, `BUILDINFO` |
+| `caddy-<version>-darwin-x86_64.tar.gz` | the **official** Caddy macOS build, unmodified and checked against Caddy's published SHA-512, plus its license and `BUILDINFO` |
 | `manifest.json` | every asset with its version, URL, SHA-256 and size (read by Devid) |
 | `checksums.txt` | `shasum -a 256` format |
 
@@ -22,6 +23,7 @@ The PHP builds include these extensions: bcmath, ctype, curl, dom, exif, fileinf
 
 - `scripts/build-php.sh` uses [static-php-cli](https://github.com/crazywhalecc/static-php-cli) (version pinned, archive SHA-256-checked before it runs).
 - `scripts/build-nginx.sh` builds nginx stable against static OpenSSL and zlib.
+- `scripts/mirror-caddy.sh` downloads the official Caddy release and verifies its SHA-512 (no rebuild).
 - `scripts/manifest.py` writes `manifest.json` and `checksums.txt`.
 - `.github/workflows/release.yml` runs everything on GitHub's `macos-15-intel` runners and publishes the release.
 
