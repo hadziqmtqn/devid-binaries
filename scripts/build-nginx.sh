@@ -3,7 +3,9 @@
 #   scripts/build-nginx.sh   -> dist/nginx-<ver>-darwin-<arch>.tar.gz (nginx + LICENSES/ + BUILDINFO)
 set -euo pipefail
 
-NGINX_VER="${NGINX_VER:-1.30.6}"   # stable branch
+# Newest stable (even minor) from upstream unless pinned; the exact version lands in BUILDINFO and
+# the manifest, and the build checks below gate what ships.
+NGINX_VER="${NGINX_VER:-$(python3 "$(dirname "$0")/upstream.py" nginx)}"
 PCRE2_VER="${PCRE2_VER:-10.49}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="${WORK:-$ROOT/work}"

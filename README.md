@@ -29,6 +29,10 @@ The PHP builds include these extensions: bcmath, ctype, curl, dom, exif, fileinf
 
 Every build fails if a binary links anything from `/usr/local` (Homebrew), if Xdebug does not load, or if a required extension is missing.
 
+## Updates
+
+`.github/workflows/check-upstream.yml` runs every Monday (08:00 Asia/Jakarta). It compares the newest PHP 8.3/8.4/8.5 (php.net), nginx stable (even minor) and Caddy with the latest release's `manifest.json`, and starts a new build when anything is newer. The build scripts pick those same newest versions unless `NGINX_VER` / `CADDY_VER` are pinned. On a Mac with Devid, `devid update` then installs the new versions.
+
 ## Licenses
 
 The [MIT license](LICENSE) covers only the build scripts, workflows and docs in this repository. The binaries in each release are distributed under their upstream licenses, included in that archive's `LICENSES/` folder.
