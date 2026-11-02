@@ -96,6 +96,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Explicitly "Latest": Devid reads releases/latest/download/manifest.json, and devid's own
+          # releases (devid-v*, devid-latest) are published here with --latest=false.
           gh release create "$TAG" dist/*.tar.gz dist/manifest.json dist/checksums.txt \
+            --latest \
             --title "$TAG" \
             --notes "Static PHP 8.3/8.4/8.5, nginx and a mirror of the official Caddy for Devid (macOS x86_64). See manifest.json; verify with checksums.txt."
