@@ -12,7 +12,8 @@ WORK="${WORK:-$ROOT/work}"      # spc, downloads, source, buildroot (cacheable)
 DIST="${DIST:-$ROOT/dist}"
 ARCH="$(uname -m)"
 
-EXT="bcmath,ctype,curl,dom,exif,fileinfo,filter,gd,iconv,intl,mbstring,opcache,openssl,pcntl,pdo,pdo_mysql,pdo_pgsql,pdo_sqlite,pgsql,phar,posix,redis,session,simplexml,sockets,sodium,sqlite3,tokenizer,xml,xmlreader,xmlwriter,zip,zlib"
+# mysqli (CodeIgniter 4, WordPress), readline (tinker, php -a) and soap: Devid D-022.
+EXT="bcmath,ctype,curl,dom,exif,fileinfo,filter,gd,iconv,intl,mbstring,mysqli,opcache,openssl,pcntl,pdo,pdo_mysql,pdo_pgsql,pdo_sqlite,pgsql,phar,posix,readline,redis,session,simplexml,soap,sockets,sodium,sqlite3,tokenizer,xml,xmlreader,xmlwriter,zip,zlib"
 # Loaded on demand as .so files (Devid D-008), not compiled in.
 SHARED="xdebug,pcov"
 # Pin a stable Xdebug; spc's default source picked an alpha.
@@ -55,7 +56,7 @@ fi
 version="$("$STAGE/php" -n -d zend_extension="$STAGE/modules/xdebug.so" -v)"
 grep -q Xdebug <<<"$version" || { echo "FAIL: xdebug.so does not load" >&2; exit 1; }
 modules="$("$STAGE/php" -n -m)"
-for ext in pdo_pgsql pdo_sqlite intl gd redis sodium zip bcmath; do
+for ext in pdo_pgsql pdo_sqlite intl gd redis sodium zip bcmath mysqli readline soap; do
   grep -qx "$ext" <<<"$modules" || { echo "FAIL: missing extension $ext" >&2; exit 1; }
 done
 
