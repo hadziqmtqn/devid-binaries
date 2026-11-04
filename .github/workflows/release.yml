@@ -7,6 +7,10 @@ on:
       tag:
         description: "Release tag (default: YYYY.MM.DD-<run number>)"
         required: false
+      dry_run:
+        description: "Build and check everything, but publish no release (e.g. to test a branch)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,19 +26,24 @@ jobs:
       matrix:
         php: ["8.3", "8.4", "8.5"]
     runs-on: macos-15-intel
-    timeout-minutes: 120
+    # A cold cache also builds ImageMagick's format libraries for the catalog (29 min on 2 cores).
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7
-      # Libraries (OpenSSL, ICU, libpq, ...) take most of the build; reuse them between runs.
+      # Libraries (OpenSSL, ICU, libpq, ImageMagick, ...) take most of the build; reuse them between runs.
       - uses: actions/cache@v6
         with:
           path: |
             work/downloads
             work/buildroot
             work/pkgroot
-          key: php-${{ matrix.php }}-${{ hashFiles('scripts/build-php.sh', 'scripts/fetch-spc.sh') }}
+          key: php-${{ matrix.php }}-${{ hashFiles('scripts/build-php.sh', 'scripts/fetch-spc.sh', 'scripts/build-ext.sh', 'extensions/**') }}
           restore-keys: php-${{ matrix.php }}-
       - run: PHP_VER=${{ matrix.php }} scripts/build-php.sh
+      # The extension catalog (Devid D-021), built against the build root of the step above.
+      - run: PHP_VER=${{ matrix.php }} scripts/build-ext.sh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}   # spc fetches some library sources through the GitHub API
       - uses: actions/upload-artifact@v7
         with:
           name: php-${{ matrix.php }}
@@ -96,7 +105,14 @@ jobs:
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           python3 scripts/manifest.py --self-test
           python3 scripts/manifest.py --tag "$TAG" --dist dist --repo "${{ github.repository }}"
+      - name: Keep the manifest of a dry run
+        if: inputs.dry_run
+        uses: actions/upload-artifact@v7
+        with:
+          name: manifest
+          path: dist/manifest.json
       - name: Publish release
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -105,4 +121,4 @@ jobs:
           gh release create "$TAG" dist/*.tar.gz dist/manifest.json dist/checksums.txt \
             --latest \
             --title "$TAG" \
-            --notes "Static PHP 8.3/8.4/8.5, nginx and a mirror of the official Caddy for Devid (macOS x86_64). See manifest.json; verify with checksums.txt."
+            --notes "Static PHP 8.3/8.4/8.5 with its extension catalog, nginx and a mirror of the official Caddy for Devid (macOS x86_64). See manifest.json; verify with checksums.txt."

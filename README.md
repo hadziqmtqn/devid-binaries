@@ -1,6 +1,6 @@
 # devid-binaries
 
-Prebuilt binaries for **Devid**, a personal local PHP development tool for macOS: static PHP 8.3 / 8.4 / 8.5 (php + php-fpm, with Xdebug and pcov as loadable `.so` files) and nginx.
+Prebuilt binaries for **Devid**, a personal local PHP development tool for macOS: static PHP 8.3 / 8.4 / 8.5 (php + php-fpm, with Xdebug and pcov as loadable `.so` files), a catalog of extra PHP extensions built against them, and nginx.
 
 > **Notice: personal project, provided as-is, without warranty.**
 > - The builds are **ad-hoc signed and not notarized**. They are meant to be downloaded by Devid itself (no Gatekeeper quarantine). If you download one by hand in a browser, macOS will block it until you remove the quarantine attribute.
@@ -13,21 +13,38 @@ Prebuilt binaries for **Devid**, a personal local PHP development tool for macOS
 |---|---|
 | `php-<version>-darwin-x86_64.tar.gz` | `php`, `php-fpm`, `modules/xdebug.so`, `modules/pcov.so`, `LICENSES/`, `BUILDINFO` |
 | `nginx-<version>-darwin-x86_64.tar.gz` | `nginx` (OpenSSL, zlib and PCRE2 linked statically), `LICENSES/`, `BUILDINFO` |
+| `ext-<name>-<version>-php<minor>-darwin-x86_64.tar.gz` | one PHP extension built for that PHP release: `<name>.so`, `ext.json` (type, PHP API, license, source and the environment it needs), `LICENSES/`, `BUILDINFO`; imagick also has `etc/` (`policy.xml`, `type.xml`) |
 | `caddy-<version>-darwin-x86_64.tar.gz` | the **official** Caddy macOS build, unmodified and checked against Caddy's published SHA-512, plus its license and `BUILDINFO` |
 | `manifest.json` | every asset with its version, URL, SHA-256 and size (read by Devid) |
 | `checksums.txt` | `shasum -a 256` format |
 
 The PHP builds include these extensions: bcmath, ctype, curl, dom, exif, fileinfo, filter, gd, iconv, intl, mbstring, mysqli, opcache, openssl, pcntl, pdo, pdo_mysql, pdo_pgsql, pdo_sqlite, pgsql, phar, posix, readline, redis, session, simplexml, soap, sockets, sodium, sqlite3, tokenizer, xml, xmlreader, xmlwriter, zip, zlib.
 
+### Extension catalog
+
+| Extension | Version | Notes |
+|---|---|---|
+| apcu | 5.1.28 | |
+| mongodb | 2.5.5 | carries its own static OpenSSL; TLS to a server with a Devid certificate needs `tlsCAFile` |
+| ldap | same as PHP | from php-src, with OpenLDAP built in; uses PHP's own OpenSSL |
+| imagick | 3.8.1 | ImageMagick 7.1.2-35 built in: JPEG, PNG, GIF, WebP, AVIF, JPEG XL, TIFF, SVG; HEIC read only; no PDF reading (no Ghostscript). Carries a fix for SVG gradient and pattern fills ([ImageMagick#9093](https://github.com/ImageMagick/ImageMagick/issues/9093)); SVG gradients in `objectBoundingBox` units are not supported by ImageMagick's renderer. Needs `MAGICK_CONFIGURE_PATH` pointing at its `etc/`. |
+
+Each extension is a recipe in `extensions/<name>.sh`: the upstream release with a pinned SHA-256, its configure options and a smoke test.
+
 ## How they are built
 
 - `scripts/build-php.sh` uses [static-php-cli](https://github.com/crazywhalecc/static-php-cli) (version pinned, archive SHA-256-checked before it runs).
+- `scripts/build-ext.sh` builds the extension catalog in the same job as each PHP version, against that version's build root, from the recipes in `extensions/`.
 - `scripts/build-nginx.sh` builds nginx stable against static OpenSSL and zlib.
 - `scripts/mirror-caddy.sh` downloads the official Caddy release and verifies its SHA-512 (no rebuild).
 - `scripts/manifest.py` writes `manifest.json` and `checksums.txt`.
 - `.github/workflows/release.yml` runs everything on GitHub's `macos-15-intel` runners and publishes the release.
 
-Every build fails if a binary links anything from `/usr/local` (Homebrew), if Xdebug does not load, or if a required extension is missing.
+Every build fails if a binary links anything from `/usr/local` (Homebrew), if Xdebug does not load, or if a required extension is missing. Every extension build also fails if:
+- the `.so` links a library outside `/usr/lib` and `/System`, or keeps an rpath into the build machine;
+- one of its undefined symbols is in neither PHP's binary nor a linked system library;
+- it does not load in `php` and `php-fpm`, with and without Xdebug;
+- its smoke test fails.
 
 ## Updates
 
