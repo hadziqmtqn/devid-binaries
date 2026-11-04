@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fonts that ship with macOS 12 and later, so ImageMagick has a default font for text and SVG
+  <text> (Devid D-024). ImageMagick's own type-apple.xml is out of date: 60 of its 193 font
+  paths exist on macOS 14. Devid points MAGICK_CONFIGURE_PATH at the directory holding this file.
+-->
+<typemap>
+  <type name="Helvetica" fullname="Helvetica" family="Helvetica" style="Normal" stretch="Normal" weight="400" glyphs="/System/Library/Fonts/Helvetica.ttc"/>
+  <type name="Arial" fullname="Arial" family="Arial" style="Normal" stretch="Normal" weight="400" glyphs="/System/Library/Fonts/Supplemental/Arial.ttf"/>
+  <type name="Arial-Bold" fullname="Arial Bold" family="Arial" style="Normal" stretch="Normal" weight="700" glyphs="/System/Library/Fonts/Supplemental/Arial Bold.ttf"/>
+  <type name="Times" fullname="Times" family="Times" style="Normal" stretch="Normal" weight="400" glyphs="/System/Library/Fonts/Times.ttc"/>
+  <type name="Courier" fullname="Courier" family="Courier" style="Normal" stretch="Normal" weight="400" glyphs="/System/Library/Fonts/Courier.ttc"/>
+  <type name="Menlo" fullname="Menlo" family="Menlo" style="Normal" stretch="Normal" weight="400" glyphs="/System/Library/Fonts/Menlo.ttc"/>
+</typemap>
