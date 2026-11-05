@@ -25,11 +25,22 @@ The PHP builds include these extensions: bcmath, ctype, curl, dom, exif, fileinf
 | Extension | Version | Notes |
 |---|---|---|
 | apcu | 5.1.28 | |
-| mongodb | 2.5.5 | carries its own static OpenSSL; TLS to a server with a Devid certificate needs `tlsCAFile` |
+| igbinary | 3.2.16; 3.2.17RC1 for PHP 8.5 | 3.2.17RC1 is the only release that supports PHP 8.5 |
+| memcached | 3.4.0 | libmemcached built in; PHP and JSON serializers and the session handler, without the igbinary and msgpack serializers (no load-order dependency) |
+| mongodb | 2.5.6 | carries its own static OpenSSL; TLS to a server with a Devid certificate needs `tlsCAFile` |
+| msgpack | 3.0.1 | |
+| swoole | 6.2.4 | for the CLI (Laravel Octane); TLS (its own static OpenSSL), HTTP/2, brotli, c-ares and the coroutine curl hook |
 | ldap | same as PHP | from php-src, with OpenLDAP built in; uses PHP's own OpenSSL |
 | imagick | 3.8.1 | ImageMagick 7.1.2-35 built in: JPEG, PNG, GIF, WebP, AVIF, JPEG XL, TIFF, SVG; HEIC read only; no PDF reading (no Ghostscript). Carries a fix for SVG gradient and pattern fills ([ImageMagick#9093](https://github.com/ImageMagick/ImageMagick/issues/9093)); SVG gradients in `objectBoundingBox` units are not supported by ImageMagick's renderer. Needs `MAGICK_CONFIGURE_PATH` pointing at its `etc/`. |
 
 Each extension is a recipe in `extensions/<name>.sh`: the upstream release with a pinned SHA-256, its configure options and a smoke test.
+
+**Adding or updating one** is a pull request with its recipe:
+- `.github/workflows/catalog.yml` builds and tests the changed recipes for PHP 8.3, 8.4 and 8.5 with `build-ext.sh`'s checks, publishing nothing. It reads the release cache but never writes it.
+- Once the PR is merged, the same workflow starts "Build and release", so the extension ships without a Devid release.
+- `workflow_dispatch` builds named recipes on demand.
+
+**The weekly upstream check** also runs `scripts/upstream.py --catalog`. Its job summary lists newer stable PECL releases of the recipes, a newer ImageMagick (whose SVG patch must then be checked), and the most downloaded PIE extensions for macOS and NTS PHP that are not in the catalog. It changes nothing by itself.
 
 ## How they are built
 

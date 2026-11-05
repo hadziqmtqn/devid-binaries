@@ -1,0 +1,91 @@
+name: Catalog recipes
+
+# Devid Phase 6 E6. A pull request that adds or changes a recipe in extensions/ builds and tests it
+# for every PHP version (build-ext.sh's checks: links, symbols, load in php and php-fpm with and
+# without Xdebug, smoke test) and publishes nothing. Once such a change is merged, "Build and
+# release" runs, so a new extension reaches the catalog through one reviewed PR.
+on:
+  pull_request:
+    paths: ["extensions/**", "scripts/build-ext.sh"]
+  push:
+    branches: [main]
+    paths: ["extensions/**", "scripts/build-ext.sh"]
+  workflow_dispatch:
+    inputs:
+      recipes:
+        description: "Recipe names, space-separated (default: all)"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event_name != 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.3", "8.4", "8.5"]
+    runs-on: macos-15-intel
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # Read the release's cache, never write it: a recipe under review must not change what ships.
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            work/downloads
+            work/buildroot
+            work/pkgroot
+          key: php-${{ matrix.php }}-${{ hashFiles('scripts/build-php.sh', 'scripts/fetch-spc.sh', 'scripts/build-ext.sh', 'extensions/**') }}
+          restore-keys: php-${{ matrix.php }}-
+      - run: PHP_VER=${{ matrix.php }} scripts/build-php.sh
+      - name: Which recipes
+        id: which
+        env:
+          RECIPES: ${{ inputs.recipes }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          # Manual: the given names. A PR: the recipes it touches, or all when build-ext.sh changed.
+          if [ -n "$RECIPES" ]; then
+            names="$RECIPES"
+          elif [ -n "$BASE" ] && ! git diff --name-only "origin/$BASE...HEAD" | grep -qx scripts/build-ext.sh; then
+            names=$(git diff --name-only "origin/$BASE...HEAD" -- extensions |
+              sed -En 's#^extensions/([a-z0-9_]+)(\.sh|/.*)$#\1#p' | sort -u | tr '\n' ' ')
+          fi
+          for n in ${names:-}; do
+            [[ $n =~ ^[a-z0-9_]+$ ]] || { echo "bad recipe name: $n" >&2; exit 1; }
+            [ -f "extensions/$n.sh" ] || { echo "skipping $n (removed)"; continue; }
+            keep="${keep:-} $n"
+          done
+          if [ -n "${names:-}" ] && [ -z "${keep:-}" ]; then
+            echo "nothing to build (only removals)"; echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "names=${keep:-}" >> "$GITHUB_OUTPUT"
+      - if: steps.which.outputs.skip != 'true'
+        run: PHP_VER=${{ matrix.php }} scripts/build-ext.sh ${{ steps.which.outputs.names }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}   # spc fetches some library sources through the GitHub API
+      - if: steps.which.outputs.skip != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: catalog-php-${{ matrix.php }}
+          path: dist/ext-*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    # A merged recipe change ships with the next release; start it now.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml -R "${{ github.repository }}"
