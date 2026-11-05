@@ -122,9 +122,9 @@ build_one() {
     fail_unless "symbols neither $(basename "$b") nor a system library provides: $(head -5 <<<"$missing" | tr '\n' ' ')" test -z "$missing"
   done
 
+  # LICENSES/<name>-<path with / as ->, so a bundled library's LICENSE never overwrites the extension's.
   for f in "${LICENSE_FILES[@]}"; do
-    [[ $f = /* ]] || f="$SRC/$f"
-    cp "$f" "$STAGE/LICENSES/$NAME-$(basename "$f")"
+    if [[ $f = /* ]]; then cp "$f" "$STAGE/LICENSES/$NAME-$(basename "$f")"; else cp "$SRC/$f" "$STAGE/LICENSES/$NAME-${f//\//-}"; fi
   done
   [ -z "$SPC_LICENSES" ] || (cd "$WORK" && run "spc-license-$NAME" ./spc dump-license --for-libs="$SPC_LICENSES" --without-php --dump-dir="$STAGE/LICENSES/libs")
   stage_extra

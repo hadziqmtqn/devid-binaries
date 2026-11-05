@@ -31,3 +31,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run release.yml -R "${{ github.repository }}"
+
+  catalog:
+    # Devid Phase 6 E6: newer releases of catalog recipes and PIE candidates, for review in the job
+    # summary. It never changes a recipe or starts a build.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/upstream.py --catalog
