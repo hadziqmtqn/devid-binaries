@@ -8,6 +8,8 @@ Prebuilt binaries for **Devid**, a personal local PHP development tool for macOS
 
 Devid's source is kept in a private repository; this one holds the build scripts for PHP and the web servers, and every release.
 
+**Using Devid:** the [guide](GUIDE.md) covers install options, sites, PHP and extensions, web servers, the desktop app, the TUI, HTTPS, updates, troubleshooting and uninstall.
+
 > **Notice: personal project, provided as-is, without warranty.**
 > - The builds are **ad-hoc signed and not notarized**. They are meant to be downloaded by Devid itself (no Gatekeeper quarantine). If you download one by hand in a browser, macOS will block it until you remove the quarantine attribute.
 > - Tested platform: **Intel macOS 14**, x86_64 only. The minimum macOS version targeted is 12.0.
@@ -28,7 +30,7 @@ Without it (the CLI and TUI only):
 curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-latest/install.sh | sh
 ```
 
-- **One command:** `install.sh` downloads `devid` and runs `devid setup` with the options after `--`, for example `--gui --php 8.3 --server caddy`. Setup installs the daemon, PHP and nginx, and with `--gui` the app as well.
+- **One command:** `install.sh` downloads `devid` and runs `devid setup` with the options after `--`, for example `--gui --php 8.3 --server caddy`. Setup installs the daemon, PHP and nginx, and with `--gui` the app as well. Every step and option: [Install](GUIDE.md#install) in the guide.
 - **Adding the app later:** run `devid setup --gui` in a new terminal, since the first one does not yet have `devid` on its PATH.
 - **The desktop app:** `Devid-darwin-x86_64.zip` in the [`devid-latest`](https://github.com/hadziqmtqn/devid-binaries/releases/tag/devid-latest) release (from v0.7.0).
   - It is a window on Devid's daemon, so it needs `devid` and `devid setup`.
