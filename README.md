@@ -16,14 +16,23 @@ Devid's source is kept in a private repository; this one holds the build scripts
 
 ## Install Devid
 
+With the desktop app:
+
 ```sh
-curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-latest/install.sh | sh
-devid setup --gui      # without --gui if you do not want the desktop app
+curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-latest/install.sh | sh -s -- --gui
 ```
 
+Without it (the CLI and TUI only):
+
+```sh
+curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-latest/install.sh | sh
+```
+
+- **One command:** `install.sh` downloads `devid` and runs `devid setup` with the options after `--`, for example `--gui --php 8.3 --server caddy`. Setup installs the daemon, PHP and nginx, and with `--gui` the app as well.
+- **Adding the app later:** run `devid setup --gui` in a new terminal, since the first one does not yet have `devid` on its PATH.
 - **The desktop app:** `Devid-darwin-x86_64.zip` in the [`devid-latest`](https://github.com/hadziqmtqn/devid-binaries/releases/tag/devid-latest) release (from v0.7.0).
   - It is a window on Devid's daemon, so it needs `devid` and `devid setup`.
-  - `devid setup --gui` installs it into `~/Applications` without a Gatekeeper prompt. A browser download is quarantined; after unzipping it, run `xattr -dr com.apple.quarantine Devid.app`.
+  - `--gui` installs it into `~/Applications` without a Gatekeeper prompt. A browser download is quarantined; after unzipping it, run `xattr -dr com.apple.quarantine Devid.app`.
 - **Updates:** `devid self-update` updates `devid` and the app.
 - **Releases:**
   - `devid-v<version>` (one per version) and `devid-latest` (always the newest) hold `devid-darwin-x86_64`, `install.sh`, `devid-version.txt`, `Devid-darwin-x86_64.zip` and `checksums.txt`.
