@@ -1,11 +1,33 @@
 # devid-binaries
 
-Prebuilt binaries for **Devid**, a personal local PHP development tool for macOS: static PHP 8.3 / 8.4 / 8.5 (php + php-fpm, with Xdebug and pcov as loadable `.so` files), a catalog of extra PHP extensions built against them, and nginx.
+Prebuilt binaries for **Devid**, a personal local PHP development tool for macOS:
+- `devid` itself (the CLI, TUI and daemon) and the Devid desktop app;
+- static PHP 8.3 / 8.4 / 8.5 (php + php-fpm, with Xdebug and pcov as loadable `.so` files);
+- a catalog of extra PHP extensions built against them;
+- nginx.
+
+Devid's source is kept in a private repository; this one holds the build scripts for PHP and the web servers, and every release.
 
 > **Notice: personal project, provided as-is, without warranty.**
 > - The builds are **ad-hoc signed and not notarized**. They are meant to be downloaded by Devid itself (no Gatekeeper quarantine). If you download one by hand in a browser, macOS will block it until you remove the quarantine attribute.
 > - Tested platform: **Intel macOS 14**, x86_64 only. The minimum macOS version targeted is 12.0.
+> - `devid setup` asks for your password once and **changes the system**. It adds `/etc/resolver/test`, trusts Devid's certificate authority in the System keychain, and forwards ports 80 and 443 to 8088 and 8443 with a pf anchor. `devid uninstall` undoes all of it.
 > - No support is promised. Use at your own risk.
+
+## Install Devid
+
+```sh
+curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-latest/install.sh | sh
+devid setup --gui      # without --gui if you do not want the desktop app
+```
+
+- **The desktop app:** `Devid-darwin-x86_64.zip` in the [`devid-latest`](https://github.com/hadziqmtqn/devid-binaries/releases/tag/devid-latest) release (from v0.7.0).
+  - It is a window on Devid's daemon, so it needs `devid` and `devid setup`.
+  - `devid setup --gui` installs it into `~/Applications` without a Gatekeeper prompt. A browser download is quarantined; after unzipping it, run `xattr -dr com.apple.quarantine Devid.app`.
+- **Updates:** `devid self-update` updates `devid` and the app.
+- **Releases:**
+  - `devid-v<version>` (one per version) and `devid-latest` (always the newest) hold `devid-darwin-x86_64`, `install.sh`, `devid-version.txt`, `Devid-darwin-x86_64.zip` and `checksums.txt`.
+  - The other releases hold PHP, the web servers and the extension catalog.
 
 ## What is in a release
 
