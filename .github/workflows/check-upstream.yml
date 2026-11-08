@@ -1,7 +1,8 @@
 name: Check upstream
 
 # Weekly (Devid Phase 5 R5): compare the newest PHP 8.3/8.4/8.5, nginx stable and Caddy with the
-# current release's manifest.json, and start "Build and release" when anything is newer.
+# current build's manifest.json (the runtime-latest release, Devid D-038), and start "Build and
+# release" when anything is newer.
 # The build scripts resolve those same newest versions, and their checks gate what ships.
 on:
   schedule:
@@ -18,13 +19,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - name: Compare with the latest release
+      - name: Compare with the current build
         id: compare
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python3 scripts/upstream.py --self-test
-          curl -fsSL -o manifest.json "https://github.com/${{ github.repository }}/releases/latest/download/manifest.json"
+          curl -fsSL -o manifest.json "https://github.com/${{ github.repository }}/releases/download/runtime-latest/manifest.json"
           python3 scripts/upstream.py --compare manifest.json
       - name: Start a release build
         if: steps.compare.outputs.changed == 'true'
