@@ -116,9 +116,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Explicitly "Latest": Devid reads releases/latest/download/manifest.json, and devid's own
-          # releases (devid-v*, devid-latest) are published here with --latest=false.
+          # Devid D-038: GitHub's "Latest" here is the newest devid (devid-v*). Devid reads this build's
+          # manifest from the rolling runtime-latest release.
           gh release create "$TAG" dist/*.tar.gz dist/manifest.json dist/checksums.txt \
-            --latest \
+            --latest=false \
             --title "$TAG" \
             --notes "Static PHP 8.3/8.4/8.5 with its extension catalog, nginx and a mirror of the official Caddy for Devid (macOS x86_64). See manifest.json; verify with checksums.txt."
+          if ! gh release view runtime-latest >/dev/null 2>&1; then
+            gh release create runtime-latest --latest=false --title "Devid runtime (latest)" \
+              --notes "Always the newest PHP, nginx and Caddy builds for Devid. manifest.json points at the dated release that holds them."
+          fi
+          gh release upload runtime-latest dist/manifest.json --clobber
+          # devid 0.10.0 and older read manifest.json from the Latest release, a devid release.
+          LATEST_TAG=$(gh release view --json tagName -q .tagName)
+          case "$LATEST_TAG" in devid-v*) gh release upload "$LATEST_TAG" dist/manifest.json --clobber ;; esac

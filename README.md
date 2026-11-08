@@ -38,7 +38,8 @@ curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-
 - **Updates:** `devid self-update` updates `devid` and the app.
 - **Releases:**
   - `devid-v<version>` (one per version) and `devid-latest` (always the newest) hold `devid-darwin-x86_64`, `install.sh`, `devid-version.txt`, `Devid-darwin-x86_64.zip` and `checksums.txt`.
-  - The other releases hold PHP, the web servers and the extension catalog.
+  - The newest stable `devid-v<version>` is the release marked **Latest**, which `devid self-update` reads. A version with a suffix (`devid-v0.11.0-rc.1`) is a pre-release for testing, installed by hand.
+  - The dated releases (`2026.11.05-7`) hold PHP, the web servers and the extension catalog. `runtime-latest` always has the newest one's `manifest.json`, which Devid reads.
 
 ## What is in a release
 
@@ -92,7 +93,7 @@ Every build fails if a binary links anything from `/usr/local` (Homebrew), if Xd
 
 ## Updates
 
-`.github/workflows/check-upstream.yml` runs every Monday (08:00 Asia/Jakarta). It compares the newest PHP 8.3/8.4/8.5 (php.net), nginx stable (even minor) and Caddy with the latest release's `manifest.json`, and starts a new build when anything is newer. The build scripts pick those same newest versions unless `NGINX_VER` / `CADDY_VER` are pinned. On a Mac with Devid, `devid update` then installs the new versions.
+`.github/workflows/check-upstream.yml` runs every Monday (08:00 Asia/Jakarta). It compares the newest PHP 8.3/8.4/8.5 (php.net), nginx stable (even minor) and Caddy with `runtime-latest`'s `manifest.json`, and starts a new build when anything is newer. The build scripts pick those same newest versions unless `NGINX_VER` / `CADDY_VER` are pinned. On a Mac with Devid, `devid update` then installs the new versions.
 
 ## Licenses
 
