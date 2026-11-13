@@ -6,7 +6,7 @@ Prebuilt binaries for **Devid**, a personal local PHP development tool for macOS
 - a catalog of extra PHP extensions built against them;
 - nginx.
 
-Devid's source is kept in a private repository; this one holds the build scripts for PHP and the web servers, and every release.
+Devid's source is public in [`hadziqmtqn/devid`](https://github.com/hadziqmtqn/devid), under the GNU AGPL v3; this one holds the build scripts for PHP and the web servers, and every release.
 
 **Using Devid:** the [guide](GUIDE.md) covers install options, sites, PHP and extensions, web servers, the desktop app, the TUI, HTTPS, updates, troubleshooting and uninstall.
 
