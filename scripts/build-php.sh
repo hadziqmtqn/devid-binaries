@@ -27,6 +27,7 @@ cd "$WORK"
 
 # Keep Homebrew out of the build: no pkg-config paths, and SDKROOT makes clang/ld skip
 # /usr/local/include and /usr/local/lib (Homebrew's openssl headers once broke the link).
+# On Apple silicon Homebrew is in /opt/homebrew, which clang never searches.
 unset PKG_CONFIG_PATH
 export SDKROOT="$(xcrun --show-sdk-path)"
 # Build for the oldest macOS Devid supports, whatever the CI runner's version is.
@@ -50,8 +51,8 @@ cp buildroot/modules/xdebug.so buildroot/modules/pcov.so "$STAGE/modules/"
 # `cmd | grep -q` fails when grep exits early and cmd gets SIGPIPE, which made these checks
 # flaky in CI and could hide a /usr/local link.
 links="$(otool -L "$STAGE/php" "$STAGE/php-fpm" "$STAGE"/modules/*.so)"
-if grep -q /usr/local <<<"$links"; then
-  echo "FAIL: links Homebrew (/usr/local) libraries" >&2; echo "$links" >&2; exit 1
+if grep -qE '/usr/local|/opt/homebrew' <<<"$links"; then
+  echo "FAIL: links Homebrew (/usr/local or /opt/homebrew) libraries" >&2; echo "$links" >&2; exit 1
 fi
 version="$("$STAGE/php" -n -d zend_extension="$STAGE/modules/xdebug.so" -v)"
 grep -q Xdebug <<<"$version" || { echo "FAIL: xdebug.so does not load" >&2; exit 1; }

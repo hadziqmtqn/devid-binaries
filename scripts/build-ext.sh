@@ -21,7 +21,7 @@ unset PKG_CONFIG_PATH
 export SDKROOT="$(xcrun --show-sdk-path)"
 export MACOSX_DEPLOYMENT_TARGET=12.0
 export PKG_CONFIG_LIBDIR="$BR/lib/pkgconfig"
-export PATH="$BR/bin:$WORK/pkgroot/$ARCH-darwin/bin:$PATH"
+export PATH="$BR/bin:$WORK/pkgroot/${ARCH/arm64/aarch64}-darwin/bin:$PATH"   # spc's GNU arch name
 
 FULL="$(php-config --version)"
 [ "${FULL%.*}" = "$PHP_VER" ] || { echo "FAIL: the build root holds PHP $FULL, not $PHP_VER; run build-php.sh first" >&2; exit 1; }
