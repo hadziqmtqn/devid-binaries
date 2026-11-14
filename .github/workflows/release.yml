@@ -25,7 +25,9 @@ jobs:
       fail-fast: false
       matrix:
         php: ["8.3", "8.4", "8.5"]
-    runs-on: macos-15-intel
+        arch: [x86_64, arm64]
+    # Intel and Apple silicon runners; each builds for its own arch (Devid D-044).
+    runs-on: ${{ matrix.arch == 'arm64' && 'macos-15' || 'macos-15-intel' }}
     # A cold cache also builds ImageMagick's format libraries for the catalog (29 min on 2 cores).
     timeout-minutes: 180
     steps:
@@ -37,8 +39,8 @@ jobs:
             work/downloads
             work/buildroot
             work/pkgroot
-          key: php-${{ matrix.php }}-${{ hashFiles('scripts/build-php.sh', 'scripts/fetch-spc.sh', 'scripts/build-ext.sh', 'extensions/**') }}
-          restore-keys: php-${{ matrix.php }}-
+          key: php-${{ matrix.arch }}-${{ matrix.php }}-${{ hashFiles('scripts/build-php.sh', 'scripts/fetch-spc.sh', 'scripts/build-ext.sh', 'extensions/**') }}
+          restore-keys: php-${{ matrix.arch }}-${{ matrix.php }}-
       - run: PHP_VER=${{ matrix.php }} scripts/build-php.sh
       # The extension catalog (Devid D-021), built against the build root of the step above.
       - run: PHP_VER=${{ matrix.php }} scripts/build-ext.sh
@@ -46,12 +48,16 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}   # spc fetches some library sources through the GitHub API
       - uses: actions/upload-artifact@v7
         with:
-          name: php-${{ matrix.php }}
+          name: php-${{ matrix.php }}-${{ matrix.arch }}
           path: dist/*.tar.gz
           if-no-files-found: error
 
   nginx:
-    runs-on: macos-15-intel
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'macos-15' || 'macos-15-intel' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
@@ -61,14 +67,14 @@ jobs:
             work/downloads
             work/buildroot
             work/pkgroot
-          key: nginx-${{ hashFiles('scripts/build-nginx.sh', 'scripts/fetch-spc.sh') }}
-          restore-keys: nginx-
+          key: nginx-${{ matrix.arch }}-${{ hashFiles('scripts/build-nginx.sh', 'scripts/fetch-spc.sh') }}
+          restore-keys: nginx-${{ matrix.arch }}-
       - run: scripts/build-nginx.sh
         env:
           GITHUB_TOKEN: ${{ github.token }}   # upstream.py: avoid the anonymous API rate limit
       - uses: actions/upload-artifact@v7
         with:
-          name: nginx
+          name: nginx-${{ matrix.arch }}
           path: dist/*.tar.gz
           if-no-files-found: error
 
@@ -78,7 +84,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - run: scripts/mirror-caddy.sh
+      - run: |
+          # One upstream version for both arches, even if Caddy releases in between.
+          export CADDY_VER="$(python3 scripts/upstream.py caddy)"
+          ARCH=x86_64 scripts/mirror-caddy.sh
+          ARCH=arm64 scripts/mirror-caddy.sh
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/upload-artifact@v7
@@ -98,6 +108,8 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      # shortcut: each arch job picks the newest PHP and nginx patch itself; when upstream releases
+      # during a run the two arches differ, manifest.py stops ("two versions of ...") and a rerun fixes it.
       - name: Manifest and checksums
         run: |
           TAG="${{ inputs.tag }}"
@@ -121,7 +133,7 @@ jobs:
           gh release create "$TAG" dist/*.tar.gz dist/manifest.json dist/checksums.txt \
             --latest=false \
             --title "$TAG" \
-            --notes "Static PHP 8.3/8.4/8.5 with its extension catalog, nginx and a mirror of the official Caddy for Devid (macOS x86_64). See manifest.json; verify with checksums.txt."
+            --notes "Static PHP 8.3/8.4/8.5 with its extension catalog, nginx and a mirror of the official Caddy for Devid (macOS on Intel and Apple silicon: x86_64 and arm64). See manifest.json; verify with checksums.txt."
           if ! gh release view runtime-latest >/dev/null 2>&1; then
             gh release create runtime-latest --latest=false --title "Devid runtime (latest)" \
               --notes "Always the newest PHP, nginx and Caddy builds for Devid. manifest.json points at the dated release that holds them."

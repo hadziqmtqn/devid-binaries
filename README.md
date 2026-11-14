@@ -45,12 +45,14 @@ curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-
 
 | Asset | Contents |
 |---|---|
-| `php-<version>-darwin-x86_64.tar.gz` | `php`, `php-fpm`, `modules/xdebug.so`, `modules/pcov.so`, `LICENSES/`, `BUILDINFO` |
-| `nginx-<version>-darwin-x86_64.tar.gz` | `nginx` (OpenSSL, zlib and PCRE2 linked statically), `LICENSES/`, `BUILDINFO` |
-| `ext-<name>-<version>-php<minor>-darwin-x86_64.tar.gz` | one PHP extension built for that PHP release: `<name>.so`, `ext.json` (type, PHP API, license, source and the environment it needs), `LICENSES/`, `BUILDINFO`; imagick also has `etc/` (`policy.xml`, `type.xml`) |
-| `caddy-<version>-darwin-x86_64.tar.gz` | the **official** Caddy macOS build, unmodified and checked against Caddy's published SHA-512, plus its license and `BUILDINFO` |
+| `php-<version>-darwin-<arch>.tar.gz` | `php`, `php-fpm`, `modules/xdebug.so`, `modules/pcov.so`, `LICENSES/`, `BUILDINFO` |
+| `nginx-<version>-darwin-<arch>.tar.gz` | `nginx` (OpenSSL, zlib and PCRE2 linked statically), `LICENSES/`, `BUILDINFO` |
+| `ext-<name>-<version>-php<minor>-darwin-<arch>.tar.gz` | one PHP extension built for that PHP release: `<name>.so`, `ext.json` (type, PHP API, license, source and the environment it needs), `LICENSES/`, `BUILDINFO`; imagick also has `etc/` (`policy.xml`, `type.xml`) |
+| `caddy-<version>-darwin-<arch>.tar.gz` | the **official** Caddy macOS build, unmodified and checked against Caddy's published SHA-512, plus its license and `BUILDINFO` |
 | `manifest.json` | every asset with its version, URL, SHA-256 and size (read by Devid) |
 | `checksums.txt` | `shasum -a 256` format |
+
+`<arch>` is `x86_64` (Intel) or `arm64` (Apple silicon). Each is built natively on its own GitHub runner.
 
 The PHP builds include these extensions: bcmath, ctype, curl, dom, exif, fileinfo, filter, gd, iconv, intl, mbstring, mysqli, opcache, openssl, pcntl, pdo, pdo_mysql, pdo_pgsql, pdo_sqlite, pgsql, phar, posix, readline, redis, session, simplexml, soap, sockets, sodium, sqlite3, tokenizer, xml, xmlreader, xmlwriter, zip, zlib.
 
@@ -83,9 +85,9 @@ Each extension is a recipe in `extensions/<name>.sh`: the upstream release with 
 - `scripts/build-nginx.sh` builds nginx stable against static OpenSSL and zlib.
 - `scripts/mirror-caddy.sh` downloads the official Caddy release and verifies its SHA-512 (no rebuild).
 - `scripts/manifest.py` writes `manifest.json` and `checksums.txt`.
-- `.github/workflows/release.yml` runs everything on GitHub's `macos-15-intel` runners and publishes the release.
+- `.github/workflows/release.yml` builds on GitHub's `macos-15-intel` (x86_64) and `macos-15` (arm64) runners and publishes the release.
 
-Every build fails if a binary links anything from `/usr/local` (Homebrew), if Xdebug does not load, or if a required extension is missing. Every extension build also fails if:
+Every build fails if a binary links anything from `/usr/local` or `/opt/homebrew` (Homebrew), if Xdebug does not load, or if a required extension is missing. Every extension build also fails if:
 - the `.so` links a library outside `/usr/lib` and `/System`, or keeps an rpath into the build machine;
 - one of its undefined symbols is in neither PHP's binary nor a linked system library;
 - it does not load in `php` and `php-fpm`, with and without Xdebug;

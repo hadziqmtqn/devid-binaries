@@ -49,19 +49,19 @@ STAGE="$WORK/stage/$NAME"
 rm -rf "$STAGE" && mkdir -p "$STAGE/LICENSES"
 cp objs/nginx "$STAGE/nginx"
 strip "$STAGE/nginx"
+codesign --force --sign - "$STAGE/nginx"   # ad-hoc (Devid D-010); arm64 runs only signed code
 cp LICENSE "$STAGE/LICENSES/nginx.txt"
 cp "../pcre2-$PCRE2_VER/LICENCE.md" "$STAGE/LICENSES/pcre2.md" 2>/dev/null || cp "../pcre2-$PCRE2_VER/LICENCE" "$STAGE/LICENSES/pcre2.txt"
 (cd "$WORK" && ./spc dump-license --for-libs=openssl,zlib --without-php --dump-dir="$STAGE/LICENSES/libs")
 
 # Capture first: `cmd | grep -q` under pipefail fails on SIGPIPE (see build-php.sh).
 links="$(otool -L "$STAGE/nginx")"
-if grep -q /usr/local <<<"$links"; then
-  echo "FAIL: links Homebrew (/usr/local) libraries" >&2; echo "$links" >&2; exit 1
+if grep -qE '/usr/local|/opt/homebrew' <<<"$links"; then
+  echo "FAIL: links Homebrew (/usr/local or /opt/homebrew) libraries" >&2; echo "$links" >&2; exit 1
 fi
 info="$("$STAGE/nginx" -V 2>&1)"
 grep -q "nginx/$NGINX_VER" <<<"$info" || { echo "FAIL: nginx -V" >&2; exit 1; }
 
-codesign --force --sign - "$STAGE/nginx"   # ad-hoc (Devid D-010)
 {
   echo "nginx $NGINX_VER"
   echo "arch $ARCH"
