@@ -1,0 +1,9 @@
+# Issues live in hadziqmtqn/devid, next to the code (D-045).
+blank_issues_enabled: false
+contact_links:
+  - name: Bug report, feature or extension request
+    url: https://github.com/hadziqmtqn/devid/issues/new/choose
+    about: Devid's issues are in the devid repository, next to the source.
+  - name: Security vulnerability
+    url: https://github.com/hadziqmtqn/devid/security/advisories/new
+    about: Report it privately, not in a public issue.

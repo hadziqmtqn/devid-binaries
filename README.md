@@ -6,7 +6,7 @@ Prebuilt binaries for **[Devid](https://devid.bekenweb.com)**, a local developme
 - a catalog of extra PHP extensions built against them;
 - nginx, and the official Caddy build, mirrored unmodified.
 
-Devid's source is public in [`hadziqmtqn/devid`](https://github.com/hadziqmtqn/devid), under the GNU AGPL v3. This repository holds the build scripts for PHP and the web servers, every release, and the [issue tracker](https://github.com/hadziqmtqn/devid-binaries/issues).
+Devid's source is public in [`hadziqmtqn/devid`](https://github.com/hadziqmtqn/devid), under the GNU AGPL v3. This repository holds the build scripts for PHP and the web servers, and every release. Bug reports and feature requests go to [`devid`'s issues](https://github.com/hadziqmtqn/devid/issues/new/choose).
 
 **Using Devid:** the [guide](https://devid.bekenweb.com/docs) covers install options, sites, Node.js apps and dev servers, PHP and extensions, web servers, sharing a site, the desktop app, the TUI, HTTPS, updates, troubleshooting and uninstall.
 
@@ -14,7 +14,7 @@ Devid's source is public in [`hadziqmtqn/devid`](https://github.com/hadziqmtqn/d
 > - The builds are **ad-hoc signed and not notarized**. They are meant to be downloaded by Devid itself (no Gatekeeper quarantine). If you download one by hand in a browser, macOS will block it until you remove the quarantine attribute.
 > - Tested platform: **Intel macOS 14**, x86_64 only. The minimum macOS version targeted is 12.0.
 > - `devid setup` asks for your password once and **changes the system**. It adds `/etc/resolver/test`, trusts Devid's certificate authority in the System keychain, and forwards ports 80 and 443 to 8088 and 8443 with a pf anchor. `devid uninstall` undoes all of it.
-> - Bug reports and feature requests are welcome in [Issues](https://github.com/hadziqmtqn/devid-binaries/issues), but no support is promised. Use at your own risk.
+> - Bug reports and feature requests are welcome in [`devid`'s issues](https://github.com/hadziqmtqn/devid/issues/new/choose), but no support is promised. Use at your own risk.
 
 ## Install Devid
 
