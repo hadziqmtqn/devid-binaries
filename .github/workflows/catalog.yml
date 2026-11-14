@@ -48,6 +48,8 @@ jobs:
           key: php-${{ matrix.arch }}-${{ matrix.php }}-${{ hashFiles('scripts/build-php.sh', 'scripts/fetch-spc.sh', 'scripts/build-ext.sh', 'extensions/**') }}
           restore-keys: php-${{ matrix.arch }}-${{ matrix.php }}-
       - run: PHP_VER=${{ matrix.php }} scripts/build-php.sh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}   # spc download: the anonymous API limit runs out with six jobs
       - name: Which recipes
         id: which
         env:
