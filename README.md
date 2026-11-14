@@ -1,20 +1,20 @@
 # devid-binaries
 
-Prebuilt binaries for **Devid**, a personal local PHP development tool for macOS:
+Prebuilt binaries for **[Devid](https://devid.bekenweb.com)**, a local development environment for Laravel, PHP and Node.js on Intel Macs:
 - `devid` itself (the CLI, TUI and daemon) and the Devid desktop app;
 - static PHP 8.3 / 8.4 / 8.5 (php + php-fpm, with Xdebug and pcov as loadable `.so` files);
 - a catalog of extra PHP extensions built against them;
-- nginx.
+- nginx, and the official Caddy build, mirrored unmodified.
 
-Devid's source is public in [`hadziqmtqn/devid`](https://github.com/hadziqmtqn/devid), under the GNU AGPL v3; this one holds the build scripts for PHP and the web servers, and every release.
+Devid's source is public in [`hadziqmtqn/devid`](https://github.com/hadziqmtqn/devid), under the GNU AGPL v3. This repository holds the build scripts for PHP and the web servers, every release, and the [issue tracker](https://github.com/hadziqmtqn/devid-binaries/issues).
 
-**Using Devid:** the [guide](GUIDE.md) covers install options, sites, PHP and extensions, web servers, the desktop app, the TUI, HTTPS, updates, troubleshooting and uninstall.
+**Using Devid:** the [guide](https://devid.bekenweb.com/docs) covers install options, sites, Node.js apps and dev servers, PHP and extensions, web servers, sharing a site, the desktop app, the TUI, HTTPS, updates, troubleshooting and uninstall.
 
-> **Notice: personal project, provided as-is, without warranty.**
+> **Notice: open-source personal project, provided as is, without warranty.**
 > - The builds are **ad-hoc signed and not notarized**. They are meant to be downloaded by Devid itself (no Gatekeeper quarantine). If you download one by hand in a browser, macOS will block it until you remove the quarantine attribute.
 > - Tested platform: **Intel macOS 14**, x86_64 only. The minimum macOS version targeted is 12.0.
 > - `devid setup` asks for your password once and **changes the system**. It adds `/etc/resolver/test`, trusts Devid's certificate authority in the System keychain, and forwards ports 80 and 443 to 8088 and 8443 with a pf anchor. `devid uninstall` undoes all of it.
-> - No support is promised. Use at your own risk.
+> - Bug reports and feature requests are welcome in [Issues](https://github.com/hadziqmtqn/devid-binaries/issues), but no support is promised. Use at your own risk.
 
 ## Install Devid
 
@@ -30,7 +30,7 @@ Without it (the CLI and TUI only):
 curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-latest/install.sh | sh
 ```
 
-- **One command:** `install.sh` downloads `devid` and runs `devid setup` with the options after `--`, for example `--gui --php 8.3 --server caddy`. Setup installs the daemon, PHP and nginx, and with `--gui` the app as well. Every step and option: [Install](GUIDE.md#install) in the guide.
+- **One command:** `install.sh` downloads `devid` and runs `devid setup` with the options after `--`, for example `--gui --php 8.3 --server caddy`. Setup installs the daemon, PHP and nginx, and with `--gui` the app as well. Every step and option: [Install](https://devid.bekenweb.com/docs/install) in the guide.
 - **Adding the app later:** run `devid setup --gui` in a new terminal, since the first one does not yet have `devid` on its PATH.
 - **The desktop app:** `Devid-darwin-x86_64.zip` in the [`devid-latest`](https://github.com/hadziqmtqn/devid-binaries/releases/tag/devid-latest) release (from v0.7.0).
   - It is a window on Devid's daemon, so it needs `devid` and `devid setup`.
@@ -97,6 +97,7 @@ Every build fails if a binary links anything from `/usr/local` (Homebrew), if Xd
 
 ## Licenses
 
-The [MIT license](LICENSE) covers only the build scripts, workflows and docs in this repository. The binaries in each release are distributed under their upstream licenses, included in that archive's `LICENSES/` folder.
+The [MIT license](LICENSE) covers only the build scripts, workflows and docs in this repository.
 
-Each archive carries the licenses of everything compiled into it in `LICENSES/`. This includes PHP (PHP License 3.01), OpenSSL (Apache-2.0), ICU, libxml2, libpq, nginx (BSD-2-Clause), PCRE2 (BSD-3-Clause) and the other bundled libraries.
+- **Devid:** `devid` and the desktop app are under the [GNU AGPL v3](https://github.com/hadziqmtqn/devid/blob/main/LICENSE). The source of each `devid-v<version>` release is the `v<version>` tag in [`hadziqmtqn/devid`](https://github.com/hadziqmtqn/devid).
+- **Everything else:** each archive carries the licenses of everything compiled into it in `LICENSES/`. This includes PHP (PHP License 3.01), OpenSSL (Apache-2.0), ICU, libxml2, libpq, nginx (BSD-2-Clause), PCRE2 (BSD-3-Clause) and the other bundled libraries.
