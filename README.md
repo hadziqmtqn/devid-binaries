@@ -1,6 +1,6 @@
 # devid-binaries
 
-Prebuilt binaries for **[Devid](https://devid.bekenweb.com)**, a local development environment for Laravel, PHP and Node.js on Intel Macs:
+Prebuilt binaries for **[Devid](https://devid.bekenweb.com)**, a local development environment for Laravel, PHP and Node.js on Macs, Intel or Apple silicon:
 - `devid` itself (the CLI, TUI and daemon) and the Devid desktop app;
 - static PHP 8.3 / 8.4 / 8.5 (php + php-fpm, with Xdebug and pcov as loadable `.so` files);
 - a catalog of extra PHP extensions built against them;
@@ -12,7 +12,7 @@ Devid's source is public in [`hadziqmtqn/devid`](https://github.com/hadziqmtqn/d
 
 > **Notice: open-source personal project, provided as is, without warranty.**
 > - The builds are **ad-hoc signed and not notarized**. They are meant to be downloaded by Devid itself (no Gatekeeper quarantine). If you download one by hand in a browser, macOS will block it until you remove the quarantine attribute.
-> - Tested platform: **Intel macOS 14**, x86_64 only. The minimum macOS version targeted is 12.0.
+> - Tested platforms: **Intel macOS 14** by hand. Apple silicon (arm64) is tested on GitHub's runners only: each build runs its checks natively there, and each `devid` release serves a test site with the real PHP and nginx before it is published. The minimum macOS version targeted is 12.0.
 > - `devid setup` asks for your password once and **changes the system**. It adds `/etc/resolver/test`, trusts Devid's certificate authority in the System keychain, and forwards ports 80 and 443 to 8088 and 8443 with a pf anchor. `devid uninstall` undoes all of it.
 > - Bug reports and feature requests are welcome in [`devid`'s issues](https://github.com/hadziqmtqn/devid/issues/new/choose), but no support is promised. Use at your own risk.
 
