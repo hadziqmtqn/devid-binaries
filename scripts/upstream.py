@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Newest upstream versions of what Devid ships, and whether the current release is behind.
 
-  scripts/upstream.py nginx|caddy|php-8.4    print one version (used by the build scripts)
+  scripts/upstream.py nginx|caddy|mailpit|php-8.4
+                                              print one version (used by the build scripts)
+  scripts/upstream.py --digest owner/repo tag asset
+                                              print the sha256 GitHub recorded for a release asset
+                                              (mirror-mailpit.sh; Mailpit publishes no checksums file)
   scripts/upstream.py --compare manifest.json print what is newer upstream; sets changed=true/false
                                               in $GITHUB_OUTPUT when run in Actions
   scripts/upstream.py --catalog               report for review (Devid Phase 6 E6), changes nothing:
@@ -12,7 +16,7 @@
   scripts/upstream.py --self-test
 
 Sources: php.net's release API; GitHub releases of nginx/nginx (stable = even minor, e.g.
-1.30.x; odd minors are mainline) and caddyserver/caddy (latest, no prereleases).
+1.30.x; odd minors are mainline), caddyserver/caddy and axllent/mailpit (latest, no prereleases).
 Set GITHUB_TOKEN to avoid GitHub's anonymous API rate limit.
 """
 
@@ -26,6 +30,7 @@ import urllib.request
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 PHP_MINORS = ["8.3", "8.4", "8.5"]  # Devid D-009
+TOOLS = ["nginx", "caddy", "mailpit"]  # one version each, for every PHP minor
 
 
 def get(url):
@@ -63,7 +68,20 @@ def latest(tool):
         return newest_stable_nginx(r["tag_name"] for r in releases if not r["prerelease"])
     if tool == "caddy":
         return get_json("https://api.github.com/repos/caddyserver/caddy/releases/latest")["tag_name"].removeprefix("v")
+    if tool == "mailpit":
+        return get_json("https://api.github.com/repos/axllent/mailpit/releases/latest")["tag_name"].removeprefix("v")
     raise SystemExit(f"unknown tool {tool}")
+
+
+def digest_of(release, asset):
+    """The hex sha256 GitHub recorded for one asset of a release (its API's "sha256:<hex>" digest)."""
+    for a in release.get("assets", []):
+        if a.get("name") == asset:
+            digest = a.get("digest") or ""
+            if re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                return digest.removeprefix("sha256:")
+            raise SystemExit(f"{asset}: no sha256 digest in the release ({digest!r})")
+    raise SystemExit(f"{asset}: not in the release")
 
 
 def behind(manifest, upstream):
@@ -74,7 +92,7 @@ def behind(manifest, upstream):
         want = upstream.get(f"php-{minor}")
         if want and vtuple(want) > vtuple(have):
             out.append((f"php {minor}", have, want))
-    for tool in ["nginx", "caddy"]:
+    for tool in TOOLS:
         have = manifest.get(tool, {}).get("version", "0.0.0")
         want = upstream.get(tool)
         if want and vtuple(want) > vtuple(have):
@@ -187,9 +205,24 @@ def self_test():
     assert newest_stable_nginx(["release-1.31.8"]) is None
     manifest = {"php": {"8.4": {"version": "8.4.27"}, "8.5": {"version": "8.5.12"}},
                 "nginx": {"version": "1.30.6"}, "caddy": {"version": "2.11.7"}}
-    up = {"php-8.3": "8.3.36", "php-8.4": "8.4.28", "php-8.5": "8.5.12", "nginx": "1.30.6", "caddy": "2.12.0"}
-    assert behind(manifest, up) == [("php 8.3", "0.0.0", "8.3.36"), ("php 8.4", "8.4.27", "8.4.28"), ("caddy", "2.11.7", "2.12.0")]
+    up = {"php-8.3": "8.3.36", "php-8.4": "8.4.28", "php-8.5": "8.5.12", "nginx": "1.30.6", "caddy": "2.12.0",
+          "mailpit": "1.33.1"}
+    # A manifest without Mailpit (every release before it) is behind, so the first one is built.
+    assert behind(manifest, up) == [("php 8.3", "0.0.0", "8.3.36"), ("php 8.4", "8.4.27", "8.4.28"), ("caddy", "2.11.7", "2.12.0"),
+                                    ("mailpit", "0.0.0", "1.33.1")]
+    assert behind({**manifest, "mailpit": {"version": "1.33.1"}}, {"mailpit": "1.33.1"}) == []
     assert behind(manifest, {"php-8.4": "8.4.27", "nginx": "1.30.6"}) == []
+    hexd = "d8ca2a9da16c977189f2514a7fc28f8a47fe050bd2b0296a13c815288b5fe39f"
+    release = {"assets": [{"name": "mailpit-darwin-arm64.tar.gz", "digest": "sha256:" + "0" * 64},
+                          {"name": "mailpit-darwin-amd64.tar.gz", "digest": "sha256:" + hexd}]}
+    assert digest_of(release, "mailpit-darwin-amd64.tar.gz") == hexd
+    for bad in [{"assets": []}, {"assets": [{"name": "mailpit-darwin-amd64.tar.gz", "digest": None}]},
+                {"assets": [{"name": "mailpit-darwin-amd64.tar.gz", "digest": "md5:abc"}]}]:
+        try:
+            digest_of(bad, "mailpit-darwin-amd64.tar.gz")
+            raise AssertionError(f"digest_of accepted {bad}")
+        except SystemExit:
+            pass
     # Catalog report helpers.
     assert plain("3.2.16") and plain("7.1.2-35") and not plain("3.2.17RC1") and not plain("6.3.0alpha")
     assert vparts("7.1.2-36") > vparts("7.1.2-35") and vparts("3.2.17") > vparts("3.2.16")
@@ -211,9 +244,13 @@ def main():
     args = sys.argv[1:]
     if args == ["--self-test"]:
         return self_test()
+    if len(args) == 4 and args[0] == "--digest":
+        repo, tag, asset = args[1:]
+        print(digest_of(get_json(f"https://api.github.com/repos/{repo}/releases/tags/{tag}"), asset))
+        return
     if len(args) == 2 and args[0] == "--compare":
         manifest = json.load(open(args[1]))
-        upstream = {t: latest(t) for t in [f"php-{m}" for m in PHP_MINORS] + ["nginx", "caddy"]}
+        upstream = {t: latest(t) for t in [f"php-{m}" for m in PHP_MINORS] + TOOLS}
         diffs = behind(manifest, upstream)
         print(f"release {manifest.get('tag')}; upstream {json.dumps(upstream)}")
         for what, have, want in diffs:

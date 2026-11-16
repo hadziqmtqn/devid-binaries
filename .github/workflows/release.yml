@@ -99,8 +99,27 @@ jobs:
           path: dist/*.tar.gz
           if-no-files-found: error
 
+  mailpit:
+    # Mirrors the official build (no compile), like caddy (Devid D-049).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          # One upstream version for both arches, even if Mailpit releases in between.
+          export MAILPIT_VER="$(python3 scripts/upstream.py mailpit)"
+          ARCH=x86_64 scripts/mirror-mailpit.sh
+          ARCH=arm64 scripts/mirror-mailpit.sh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mailpit
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
   release:
-    needs: [php, nginx, caddy]
+    needs: [php, nginx, caddy, mailpit]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -135,10 +154,10 @@ jobs:
           gh release create "$TAG" dist/*.tar.gz dist/manifest.json dist/checksums.txt \
             --latest=false \
             --title "$TAG" \
-            --notes "Static PHP 8.3/8.4/8.5 with its extension catalog, nginx and a mirror of the official Caddy for Devid (macOS on Intel and Apple silicon: x86_64 and arm64). See manifest.json; verify with checksums.txt."
+            --notes "Static PHP 8.3/8.4/8.5 with its extension catalog, nginx, and mirrors of the official Caddy and Mailpit for Devid (macOS on Intel and Apple silicon: x86_64 and arm64). See manifest.json; verify with checksums.txt."
           if ! gh release view runtime-latest >/dev/null 2>&1; then
             gh release create runtime-latest --latest=false --title "Devid runtime (latest)" \
-              --notes "Always the newest PHP, nginx and Caddy builds for Devid. manifest.json points at the dated release that holds them."
+              --notes "Always the newest PHP, nginx, Caddy and Mailpit builds for Devid. manifest.json points at the dated release that holds them."
           fi
           gh release upload runtime-latest dist/manifest.json --clobber
           # devid 0.10.0 and older read manifest.json from the Latest release, a devid release.
