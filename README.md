@@ -4,7 +4,7 @@ Prebuilt binaries for **[Devid](https://devid.bekenweb.com)**, a local developme
 - `devid` itself (the CLI, TUI and daemon) and the Devid desktop app;
 - static PHP 8.3 / 8.4 / 8.5 (php + php-fpm, with Xdebug and pcov as loadable `.so` files);
 - a catalog of extra PHP extensions built against them;
-- nginx, and the official Caddy build, mirrored unmodified.
+- nginx, and the official Caddy and Mailpit builds, mirrored unmodified.
 
 Devid's source is public in [`hadziqmtqn/devid`](https://github.com/hadziqmtqn/devid), under the GNU AGPL v3. This repository holds the build scripts for PHP and the web servers, and every release. Bug reports and feature requests go to [`devid`'s issues](https://github.com/hadziqmtqn/devid/issues/new/choose).
 
@@ -49,6 +49,7 @@ curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-
 | `nginx-<version>-darwin-<arch>.tar.gz` | `nginx` (OpenSSL, zlib and PCRE2 linked statically), `LICENSES/`, `BUILDINFO` |
 | `ext-<name>-<version>-php<minor>-darwin-<arch>.tar.gz` | one PHP extension built for that PHP release: `<name>.so`, `ext.json` (type, PHP API, license, source and the environment it needs), `LICENSES/`, `BUILDINFO`; imagick also has `etc/` (`policy.xml`, `type.xml`) |
 | `caddy-<version>-darwin-<arch>.tar.gz` | the **official** Caddy macOS build, unmodified and checked against Caddy's published SHA-512, plus its license and `BUILDINFO` |
+| `mailpit-<version>-darwin-<arch>.tar.gz` | the **official** Mailpit macOS build (Devid's mail catcher), unmodified and checked against the SHA-256 GitHub records for the release asset, since Mailpit publishes no checksums; plus its license and `BUILDINFO` |
 | `manifest.json` | every asset with its version, URL, SHA-256 and size (read by Devid) |
 | `checksums.txt` | `shasum -a 256` format |
 
@@ -84,6 +85,7 @@ Each extension is a recipe in `extensions/<name>.sh`: the upstream release with 
 - `scripts/build-ext.sh` builds the extension catalog in the same job as each PHP version, against that version's build root, from the recipes in `extensions/`.
 - `scripts/build-nginx.sh` builds nginx stable against static OpenSSL and zlib.
 - `scripts/mirror-caddy.sh` downloads the official Caddy release and verifies its SHA-512 (no rebuild).
+- `scripts/mirror-mailpit.sh` downloads the official Mailpit release and verifies it against GitHub's SHA-256 digest of the asset (no rebuild).
 - `scripts/manifest.py` writes `manifest.json` and `checksums.txt`.
 - `.github/workflows/release.yml` builds on GitHub's `macos-15-intel` (x86_64) and `macos-15` (arm64) runners and publishes the release.
 
@@ -95,11 +97,11 @@ Every build fails if a binary links anything from `/usr/local` or `/opt/homebrew
 
 ## Updates
 
-`.github/workflows/check-upstream.yml` runs every Monday (08:00 Asia/Jakarta). It compares the newest PHP 8.3/8.4/8.5 (php.net), nginx stable (even minor) and Caddy with `runtime-latest`'s `manifest.json`, and starts a new build when anything is newer. The build scripts pick those same newest versions unless `NGINX_VER` / `CADDY_VER` are pinned. On a Mac with Devid, `devid update` then installs the new versions.
+`.github/workflows/check-upstream.yml` runs every Monday (08:00 Asia/Jakarta). It compares the newest PHP 8.3/8.4/8.5 (php.net), nginx stable (even minor), Caddy and Mailpit with `runtime-latest`'s `manifest.json`, and starts a new build when anything is newer. The build scripts pick those same newest versions unless `NGINX_VER` / `CADDY_VER` / `MAILPIT_VER` are pinned. On a Mac with Devid, `devid update` then installs the new versions.
 
 ## Licenses
 
 The [MIT license](LICENSE) covers only the build scripts, workflows and docs in this repository.
 
 - **Devid:** `devid` and the desktop app are under the [GNU AGPL v3](https://github.com/hadziqmtqn/devid/blob/main/LICENSE). The source of each `devid-v<version>` release is the `v<version>` tag in [`hadziqmtqn/devid`](https://github.com/hadziqmtqn/devid).
-- **Everything else:** each archive carries the licenses of everything compiled into it in `LICENSES/`. This includes PHP (PHP License 3.01), OpenSSL (Apache-2.0), ICU, libxml2, libpq, nginx (BSD-2-Clause), PCRE2 (BSD-3-Clause) and the other bundled libraries.
+- **Everything else:** each archive carries the licenses of everything compiled into it in `LICENSES/`. This includes PHP (PHP License 3.01), OpenSSL (Apache-2.0), ICU, libxml2, libpq, nginx (BSD-2-Clause), PCRE2 (BSD-3-Clause), Mailpit (MIT) and the other bundled libraries.

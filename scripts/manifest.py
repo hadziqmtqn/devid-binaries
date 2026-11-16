@@ -6,6 +6,7 @@ Devid reads manifest.json to find, download and verify binaries:
   {"schema": 1, "tag": "2026.11.02", "repo": "hadziqmtqn/devid-binaries",
    "php":   {"8.4": {"version": "8.4.27", "arch": {"x86_64": {"url": ..., "sha256": ..., "size": ...}}}},
    "nginx": {"version": "1.30.6", "arch": {...}},
+   "caddy": {...}, "mailpit": {...},
    "extensions": {"8.4": {"apcu": {"version": "5.1.28", "type": "extension", "file": "apcu.so",
                                    "php_api": "20240924", "license": ..., "source": ..., "env": {},
                                    "arch": {"x86_64": {"url": ..., "sha256": ..., "size": ...}}}}}}
@@ -26,7 +27,8 @@ import tarfile
 from datetime import datetime, timezone
 
 # php-8.4.27-darwin-x86_64.tar.gz / nginx-1.30.6-darwin-x86_64.tar.gz / caddy-2.11.7-darwin-x86_64.tar.gz
-NAME = re.compile(r"^(?P<tool>php|nginx|caddy)-(?P<version>\d+\.\d+\.\d+)-darwin-(?P<arch>x86_64|arm64)\.tar\.gz$")
+# / mailpit-1.33.1-darwin-arm64.tar.gz
+NAME = re.compile(r"^(?P<tool>php|nginx|caddy|mailpit)-(?P<version>\d+\.\d+\.\d+)-darwin-(?P<arch>x86_64|arm64)\.tar\.gz$")
 # ext-apcu-5.1.28-php8.4-darwin-x86_64.tar.gz
 EXT = re.compile(r"^ext-(?P<name>[a-z0-9_]+)-(?P<version>\d[\w.+]*(?:-\d[\w.+]*)*?)-php(?P<php>\d+\.\d+)-darwin-(?P<arch>x86_64|arm64)\.tar\.gz$")
 EXT_FIELDS = ("version", "type", "file", "php_api", "license", "source", "source_sha256", "env")
@@ -117,6 +119,7 @@ def self_test():
 
     assert parse("php-8.4.27-darwin-x86_64.tar.gz") == ("php", "8.4.27", "x86_64")
     assert parse("nginx-1.30.6-darwin-arm64.tar.gz") == ("nginx", "1.30.6", "arm64")
+    assert parse("mailpit-1.33.1-darwin-arm64.tar.gz") == ("mailpit", "1.33.1", "arm64")
     assert parse("php-8.4.27-linux-x86_64.tar.gz") is None
     assert parse("evil-1.0.0-darwin-x86_64.tar.gz") is None
     assert parse_ext("ext-apcu-5.1.28-php8.4-darwin-x86_64.tar.gz") == ("apcu", "5.1.28", "8.4", "x86_64")
@@ -147,7 +150,14 @@ def self_test():
         assert e["url"] == "https://github.com/o/r/releases/download/t1/nginx-1.30.6-darwin-x86_64.tar.gz"
         assert e["sha256"] == hashlib.sha256(b"nginx-1.30.6-darwin-x86_64.tar.gz").hexdigest()
         assert sums.count("\n") == 3 and "  php-8.5.12-darwin-x86_64.tar.gz" in sums
-        assert "extensions" not in m
+        assert "extensions" not in m and "mailpit" not in m
+        for arch in ["x86_64", "arm64"]:
+            (pathlib.Path(d) / f"mailpit-1.33.1-darwin-{arch}.tar.gz").write_bytes(arch.encode())
+        m, sums = build(d, "t1", "o/r")
+        assert m["mailpit"]["version"] == "1.33.1" and set(m["mailpit"]["arch"]) == {"x86_64", "arm64"}
+        assert m["mailpit"]["arch"]["arm64"]["url"].endswith("/t1/mailpit-1.33.1-darwin-arm64.tar.gz")
+        for arch in ["x86_64", "arm64"]:
+            (pathlib.Path(d) / f"mailpit-1.33.1-darwin-{arch}.tar.gz").unlink()
         ext_archive(d, "ext-apcu-5.1.28-php8.4-darwin-x86_64.tar.gz", good)
         m, sums = build(d, "t1", "o/r")
         a = m["extensions"]["8.4"]["apcu"]
