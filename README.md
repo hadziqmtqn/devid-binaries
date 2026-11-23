@@ -47,7 +47,7 @@ curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-
 |---|---|
 | `php-<version>-<os>-<arch>.tar.gz` | `php`, `php-fpm`, `modules/xdebug.so`, `modules/pcov.so`, `LICENSES/`, `BUILDINFO` |
 | `nginx-<version>-<os>-<arch>.tar.gz` | `nginx` (OpenSSL, zlib and PCRE2 linked statically), `LICENSES/`, `BUILDINFO` |
-| `ext-<name>-<version>-php<minor>-<os>-<arch>.tar.gz` | one PHP extension built for that PHP release: `<name>.so`, `ext.json` (type, PHP API, license, source and the environment it needs), `LICENSES/`, `BUILDINFO`; imagick also has `etc/` (`policy.xml`, `type.xml`) |
+| `ext-<name>-<version>-php<minor>-<os>-<arch>.tar.gz` | one PHP extension built for that PHP release: `<name>.so`, `ext.json` (type, PHP API, license, source and the environment it needs), `LICENSES/`, `BUILDINFO`; imagick also has `etc/` (`policy.xml`, and `type.xml` with the fonts of macOS or of Debian and Ubuntu) |
 | `caddy-<version>-<os>-<arch>.tar.gz` | the **official** Caddy build, unmodified and checked against Caddy's published SHA-512, plus its license and `BUILDINFO` |
 | `mailpit-<version>-<os>-<arch>.tar.gz` | the **official** Mailpit build (Devid's mail catcher), unmodified and checked against the SHA-256 GitHub records for the release asset, since Mailpit publishes no checksums; plus its license and `BUILDINFO` |
 | `manifest.json` | every asset with its version, URL, SHA-256 and size (read by Devid) |
@@ -99,7 +99,7 @@ Every build fails if a binary links anything from `/usr/local` or `/opt/homebrew
 - it does not load in `php` and `php-fpm`, with and without Xdebug;
 - its smoke test fails.
 
-On Linux, `scripts/check-linux.sh` replaces the macOS link checks: every binary and `.so` may need only glibc's own libraries, no glibc symbol newer than 2.17 and no rpath, and nginx must be fully static. PHP, php-fpm and nginx must also run on an older CPU (QEMU's Nehalem), since a build for the build machine's CPU once crashed on older ones.
+On Linux, `scripts/check-linux.sh` replaces the macOS link checks: every binary and `.so` may need only glibc's own libraries, no glibc symbol newer than 2.17 and no rpath, and nginx must be fully static. PHP, php-fpm and nginx must also run on an older CPU (QEMU's Nehalem), since a build for the build machine's CPU once crashed on older ones. Every Linux extension is linked with `-z nodelete`, so the exit handlers of the libraries inside it still run after PHP unloads it, and with `-Bsymbolic`, so it uses its own copies of those libraries rather than PHP's.
 
 ## Updates
 
