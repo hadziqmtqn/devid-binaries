@@ -1,0 +1,149 @@
+name: Databases
+
+# Database binaries for Devid (D-058): MySQL and MongoDB (with mongosh) mirrored from their official
+# builds, PostgreSQL built from source, for macOS on Intel and Apple silicon and Linux x86_64.
+# A release track of its own (db-YYYY.MM.DD-N, and db-latest with the newest manifest.json), apart
+# from the runtime releases of release.yml: nothing Devid reads today changes.
+#
+# - Pull requests that touch the database scripts build and smoke-test everything, publishing nothing.
+# - A merge that changes db/versions.json publishes a release; so does a manual run.
+# - Every Monday, db.py check reports newer upstream versions in the job summary, changing nothing.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (default: db-YYYY.MM.DD-<run number>)"
+        required: false
+      dry_run:
+        description: "Build and check everything, but publish no release"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: [db/versions.json]
+  pull_request:
+    paths:
+      - db/**
+      - scripts/db.py
+      - scripts/db-smoke.sh
+      - scripts/mirror-mysql.sh
+      - scripts/mirror-mongodb.sh
+      - scripts/mirror-mongosh.sh
+      - scripts/build-postgres.sh
+      - .github/workflows/db-release.yml
+  schedule:
+    - cron: "15 1 * * 1"   # Monday 08:15 Asia/Jakarta, after check-upstream.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-release-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 scripts/db.py check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  plan:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 scripts/db.py --self-test
+      - id: matrix
+        run: python3 scripts/db.py matrix
+
+  build:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    name: ${{ matrix.engine }} ${{ matrix.series }} ${{ matrix.key }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      # PostgreSQL: OpenSSL (macOS) or static-php-cli's libraries and zig (Linux), between runs.
+      - if: matrix.engine == 'postgresql'
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/postgresql/deps-*
+            work/downloads
+            work/buildroot
+            work/pkgroot
+          key: db-postgresql-${{ matrix.key }}-${{ hashFiles('db/versions.json', 'scripts/build-postgres.sh', 'scripts/fetch-spc.sh') }}
+          restore-keys: db-postgresql-${{ matrix.key }}-
+      - if: matrix.os == 'linux' && matrix.engine == 'postgresql'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user patchelf
+      - name: Build and smoke-test
+        env:
+          GITHUB_TOKEN: ${{ github.token }}   # GitHub's API: mongosh's digest, spc's library sources
+          OS: ${{ matrix.os }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          case "${{ matrix.engine }}" in
+            mysql)
+              for s in $(python3 scripts/db.py series mysql); do SERIES="$s" scripts/mirror-mysql.sh; done ;;
+            mongodb)
+              scripts/mirror-mongosh.sh
+              export MONGOSH="$(ls "$PWD"/dist/mongosh-*.tar.gz)"
+              for s in $(python3 scripts/db.py series mongodb); do SERIES="$s" scripts/mirror-mongodb.sh; done ;;
+            postgresql)
+              SERIES="${{ matrix.series }}" scripts/build-postgres.sh ;;
+          esac
+      - uses: actions/upload-artifact@v7
+        with:
+          name: db-${{ matrix.engine }}-${{ matrix.series || 'all' }}-${{ matrix.key }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Manifest and checksums
+        run: |
+          TAG="${{ inputs.tag }}"
+          [ -n "$TAG" ] || TAG="db-$(date -u +%Y.%m.%d)-${{ github.run_number }}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          python3 scripts/db.py manifest --tag "$TAG" --dist dist --repo "${{ github.repository }}"
+      - name: Keep the manifest of a dry run
+        if: inputs.dry_run
+        uses: actions/upload-artifact@v7
+        with:
+          name: db-manifest
+          path: dist/manifest.json
+      - name: Publish release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Never "Latest": that is the newest devid release (Devid D-038).
+          gh release create "$TAG" dist/*.tar.gz dist/manifest.json dist/checksums.txt \
+            --latest=false \
+            --title "$TAG" \
+            --notes "Database servers for Devid (D-058): official MySQL and MongoDB Community builds and mongosh, mirrored unmodified, and PostgreSQL built from source; macOS on Intel and Apple silicon, and Linux x86_64. No Devid release uses them yet. See manifest.json; verify with checksums.txt."
+          if ! gh release view db-latest >/dev/null 2>&1; then
+            gh release create db-latest --latest=false --title "Devid databases (latest)" \
+              --notes "Always the newest database builds for Devid. manifest.json points at the dated db release that holds them."
+          fi
+          gh release upload db-latest dist/manifest.json --clobber
