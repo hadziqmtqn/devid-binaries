@@ -71,6 +71,9 @@ if [ "$OS" = darwin ]; then
     echo "FAIL: links Homebrew (/usr/local or /opt/homebrew) libraries" >&2; echo "$links" >&2; exit 1
   fi
 else
+  # spc links with a runpath into the build root; nothing there is needed at run time (glibc only),
+  # and build paths must not ship, as with the rpaths build-ext.sh drops on macOS.
+  for f in "$STAGE/php" "$STAGE/php-fpm" "$STAGE"/modules/*.so; do patchelf --remove-rpath "$f"; done
   "$ROOT/scripts/check-linux.sh" "$GLIBC_MIN" "$STAGE/php" "$STAGE/php-fpm" "$STAGE"/modules/*.so
   # Older CPUs: QEMU's Nehalem (x86-64-v2) is the oldest these builds promise.
   qemu="$(qemu-x86_64 -cpu Nehalem "$STAGE/php" -n -d zend_extension="$STAGE/modules/xdebug.so" -v 2>&1)" ||
