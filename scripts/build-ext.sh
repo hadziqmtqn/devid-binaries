@@ -171,9 +171,16 @@ build_one() {
   local load=(-n -d "$TYPE=$SO") envv=()
   while IFS='=' read -r k v; do [ -n "$k" ] && envv+=("$k=$STAGE/$v"); done < <(
     /usr/bin/python3 -I -c 'import json, sys; [print(f"{k}={v}") for k, v in json.loads(sys.argv[1]).items()]' "$ENV_JSON")
+  local rc
   for cmd in "$PHP" "$FPM" "$PHP -d zend_extension=$XDEBUG"; do
     # shellcheck disable=SC2086 # $cmd is a binary plus optional -d flags
-    m="$(env ${envv[@]+"${envv[@]}"} $cmd "${load[@]}" -m 2>&1)"
+    m="$(env ${envv[@]+"${envv[@]}"} $cmd "${load[@]}" -m 2>&1)" && rc=0 || rc=$?
+    if [ "$rc" -ge 128 ] && command -v gdb >/dev/null; then
+      # A crash (a signal): where, for the log.
+      # shellcheck disable=SC2086
+      env ${envv[@]+"${envv[@]}"} gdb -q -batch -ex run -ex bt --args $cmd "${load[@]}" -m 2>&1 | tail -25 >&2 || true
+    fi
+    fail_unless "crashes in '$cmd' (exit $rc)" test "$rc" -lt 128
     fail_unless "does not load in '$cmd': $(grep -iE 'warning|error' <<<"$m" | head -3)" grep -qx "$NAME" <<<"$m"
     fail_unless "warnings while loading in '$cmd': $(grep -iE 'warning|error' <<<"$m" | head -3)" \
       test -z "$(grep -iE 'warning|error' <<<"$m" || true)"
@@ -205,6 +212,14 @@ json.dump({"name": a[2], "version": a[3], "php": a[4], "php_api": a[5], "type": 
 
 NAMES=("$@")
 [ ${#NAMES[@]} -gt 0 ] || NAMES=($(cd "$RECIPES" && ls -- *.sh | sed 's/\.sh$//'))
+failed=""
 for n in "${NAMES[@]}"; do
-  ( build_one "$n" )   # a subshell per recipe, so one recipe's fields never leak into the next
+  # A subshell per recipe, so one recipe's fields never leak into the next. Not in an || list, which
+  # would turn off set -e inside it; a failing recipe is noted and the rest still build.
+  set +e
+  ( build_one "$n" )
+  rc=$?
+  set -e
+  [ "$rc" = 0 ] || failed="$failed $n"
 done
+[ -z "$failed" ] || { echo "FAIL: these recipes failed:$failed" >&2; exit 1; }
