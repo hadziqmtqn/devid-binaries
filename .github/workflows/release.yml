@@ -25,9 +25,14 @@ jobs:
       fail-fast: false
       matrix:
         php: ["8.3", "8.4", "8.5"]
-        arch: [x86_64, arm64]
-    # Intel and Apple silicon runners; each builds for its own arch (Devid D-044).
-    runs-on: ${{ matrix.arch == 'arm64' && 'macos-15' || 'macos-15-intel' }}
+        # Intel and Apple silicon runners, each building for its own arch (Devid D-044), and Ubuntu for
+        # Linux x86_64 (Devid D-057). "key" is the manifest's arch key, also used for caches and
+        # artifacts: the macOS ones stay as they were, so their caches carry over.
+        target:
+          - {os: darwin, arch: x86_64, key: x86_64, runner: macos-15-intel}
+          - {os: darwin, arch: arm64, key: arm64, runner: macos-15}
+          - {os: linux, arch: x86_64, key: linux-x86_64, runner: ubuntu-24.04}
+    runs-on: ${{ matrix.target.runner }}
     # A cold cache also builds ImageMagick's format libraries for the catalog (29 min on 2 cores).
     timeout-minutes: 180
     steps:
@@ -39,8 +44,11 @@ jobs:
             work/downloads
             work/buildroot
             work/pkgroot
-          key: php-${{ matrix.arch }}-${{ matrix.php }}-${{ hashFiles('scripts/build-php.sh', 'scripts/fetch-spc.sh', 'scripts/build-ext.sh', 'extensions/**') }}
-          restore-keys: php-${{ matrix.arch }}-${{ matrix.php }}-
+          key: php-${{ matrix.target.key }}-${{ matrix.php }}-${{ hashFiles('scripts/build-php.sh', 'scripts/fetch-spc.sh', 'scripts/build-ext.sh', 'scripts/check-linux.sh', 'extensions/**') }}
+          restore-keys: php-${{ matrix.target.key }}-${{ matrix.php }}-
+      # Linux: every binary must also run on an older CPU, under QEMU (Devid Phase 12 L1).
+      - if: matrix.target.os == 'linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user
       - run: PHP_VER=${{ matrix.php }} scripts/build-php.sh
         env:
           GITHUB_TOKEN: ${{ github.token }}   # spc download: the anonymous API limit runs out with six jobs
@@ -50,7 +58,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}   # spc fetches some library sources through the GitHub API
       - uses: actions/upload-artifact@v7
         with:
-          name: php-${{ matrix.php }}-${{ matrix.arch }}
+          name: php-${{ matrix.php }}-${{ matrix.target.key }}
           path: dist/*.tar.gz
           if-no-files-found: error
 
@@ -58,8 +66,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86_64, arm64]
-    runs-on: ${{ matrix.arch == 'arm64' && 'macos-15' || 'macos-15-intel' }}
+        # As in the php job.
+        target:
+          - {os: darwin, arch: x86_64, key: x86_64, runner: macos-15-intel}
+          - {os: darwin, arch: arm64, key: arm64, runner: macos-15}
+          - {os: linux, arch: x86_64, key: linux-x86_64, runner: ubuntu-24.04}
+    runs-on: ${{ matrix.target.runner }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
@@ -69,14 +81,16 @@ jobs:
             work/downloads
             work/buildroot
             work/pkgroot
-          key: nginx-${{ matrix.arch }}-${{ hashFiles('scripts/build-nginx.sh', 'scripts/fetch-spc.sh') }}
-          restore-keys: nginx-${{ matrix.arch }}-
+          key: nginx-${{ matrix.target.key }}-${{ hashFiles('scripts/build-nginx.sh', 'scripts/fetch-spc.sh', 'scripts/check-linux.sh') }}
+          restore-keys: nginx-${{ matrix.target.key }}-
+      - if: matrix.target.os == 'linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user
       - run: scripts/build-nginx.sh
         env:
           GITHUB_TOKEN: ${{ github.token }}   # upstream.py: avoid the anonymous API rate limit
       - uses: actions/upload-artifact@v7
         with:
-          name: nginx-${{ matrix.arch }}
+          name: nginx-${{ matrix.target.key }}
           path: dist/*.tar.gz
           if-no-files-found: error
 
@@ -87,10 +101,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: |
-          # One upstream version for both arches, even if Caddy releases in between.
+          # One upstream version for every build, even if Caddy releases in between.
           export CADDY_VER="$(python3 scripts/upstream.py caddy)"
-          ARCH=x86_64 scripts/mirror-caddy.sh
-          ARCH=arm64 scripts/mirror-caddy.sh
+          OS=darwin ARCH=x86_64 scripts/mirror-caddy.sh
+          OS=darwin ARCH=arm64 scripts/mirror-caddy.sh
+          OS=linux ARCH=x86_64 scripts/mirror-caddy.sh
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/upload-artifact@v7
@@ -106,10 +121,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: |
-          # One upstream version for both arches, even if Mailpit releases in between.
+          # One upstream version for every build, even if Mailpit releases in between.
           export MAILPIT_VER="$(python3 scripts/upstream.py mailpit)"
-          ARCH=x86_64 scripts/mirror-mailpit.sh
-          ARCH=arm64 scripts/mirror-mailpit.sh
+          OS=darwin ARCH=x86_64 scripts/mirror-mailpit.sh
+          OS=darwin ARCH=arm64 scripts/mirror-mailpit.sh
+          OS=linux ARCH=x86_64 scripts/mirror-mailpit.sh
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/upload-artifact@v7
@@ -154,7 +170,7 @@ jobs:
           gh release create "$TAG" dist/*.tar.gz dist/manifest.json dist/checksums.txt \
             --latest=false \
             --title "$TAG" \
-            --notes "Static PHP 8.3/8.4/8.5 with its extension catalog, nginx, and mirrors of the official Caddy and Mailpit for Devid (macOS on Intel and Apple silicon: x86_64 and arm64). See manifest.json; verify with checksums.txt."
+            --notes "Static PHP 8.3/8.4/8.5 with its extension catalog, nginx, and mirrors of the official Caddy and Mailpit for Devid: macOS on Intel and Apple silicon (x86_64, arm64), and Linux x86_64 (glibc 2.17 and later; not used by a Devid release yet). See manifest.json; verify with checksums.txt."
           if ! gh release view runtime-latest >/dev/null 2>&1; then
             gh release create runtime-latest --latest=false --title "Devid runtime (latest)" \
               --notes "Always the newest PHP, nginx, Caddy and Mailpit builds for Devid. manifest.json points at the dated release that holds them."

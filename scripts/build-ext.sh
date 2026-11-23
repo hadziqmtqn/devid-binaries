@@ -2,7 +2,7 @@
 # Build the extension catalog (Devid Phase 6, D-021) for one PHP version, against the build root
 # that scripts/build-php.sh just built, so every extension matches its PHP release.
 #   PHP_VER=8.4 scripts/build-ext.sh [name ...]   (default: every recipe in extensions/)
-#   -> dist/ext-<name>-<version>-php8.4-darwin-<arch>.tar.gz
+#   -> dist/ext-<name>-<version>-php8.4-<os>-<arch>.tar.gz (os: darwin or linux)
 # The archive root holds <name>.so, ext.json (read by manifest.py), LICENSES/ and BUILDINFO, plus
 # whatever the recipe adds (imagick: etc/). Paths in ext.json "env" are relative to that root.
 set -euo pipefail
@@ -13,15 +13,31 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="${WORK:-$ROOT/work}"      # the same work dir as build-php.sh (spc, source, buildroot)
 DIST="${DIST:-$ROOT/dist}"
 ARCH="$(uname -m)"
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"   # darwin or linux; recipes read it too
 BR="$WORK/buildroot"
 RECIPES="$ROOT/extensions"
 
 # Same isolation as build-php.sh: no Homebrew headers, libraries or pkg-config paths.
 unset PKG_CONFIG_PATH
-export SDKROOT="$(xcrun --show-sdk-path)"
-export MACOSX_DEPLOYMENT_TARGET=12.0
 export PKG_CONFIG_LIBDIR="$BR/lib/pkgconfig"
-export PATH="$BR/bin:$WORK/pkgroot/${ARCH/arm64/aarch64}-darwin/bin:$PATH"   # spc's GNU arch name
+export PATH="$BR/bin:$WORK/pkgroot/${ARCH/arm64/aarch64}-$OS/bin:$PATH"   # spc's GNU arch name
+if [ "$OS" = darwin ]; then
+  export SDKROOT="$(xcrun --show-sdk-path)"
+  export MACOSX_DEPLOYMENT_TARGET=12.0
+  JOBS="$(sysctl -n hw.ncpu)"
+  BUILD_ENV=()
+else
+  # The same target as build-php.sh (Devid Phase 12 L1): spc builds the recipes' libraries with it,
+  # and each extension's configure gets the same zig (BUILD_ENV; spc keeps its own compiler
+  # settings). zig makes __DATE__ an error, which PECL extensions print in phpinfo().
+  GLIBC_MIN=2.17
+  export SPC_TARGET="x86_64-linux-gnu.$GLIBC_MIN"
+  ZIG="$(find "$WORK/pkgroot" -type f -name zig -perm -u+x | head -1)"
+  [ -n "$ZIG" ] || { echo "FAIL: no zig in $WORK/pkgroot; run build-php.sh first" >&2; exit 1; }
+  BUILD_ENV=("CC=$ZIG cc -target $SPC_TARGET" "CXX=$ZIG c++ -target $SPC_TARGET"
+    "CFLAGS=-O2 -Wno-date-time" "CXXFLAGS=-O2 -Wno-date-time")
+  JOBS="$(nproc)"
+fi
 
 FULL="$(php-config --version)"
 [ "${FULL%.*}" = "$PHP_VER" ] || { echo "FAIL: the build root holds PHP $FULL, not $PHP_VER; run build-php.sh first" >&2; exit 1; }
@@ -51,16 +67,29 @@ spc_libs() {
 # fail_unless <description> <command...>
 fail_unless() { local what="$1"; shift; "$@" || { echo "FAIL: $NAME: $what" >&2; return 1; }; }
 
-# The .so is a flat-namespace bundle: every undefined symbol is looked up at load time in PHP's
-# binary or a system library it links. Prints the ones that are in neither (must be none); a
-# missing one fails the load, or crashes later when the code reaches it (Devid E1 spike).
+# The .so is a flat-namespace bundle (macOS) or a shared object (Linux): every undefined symbol is
+# looked up at load time in PHP's binary or a system library it links. Prints the ones that are in
+# neither (must be none); a missing one fails the load, or crashes later when the code reaches it
+# (Devid E1 spike).
 missing_symbols() {
+  [ "$OS" = darwin ] || { missing_symbols_elf "$@"; return; }
   comm -23 <(nm -u "$1" | sort -u) <(nm -gU "$2" | awk '{print $3}' | sort -u) |
     /usr/bin/python3 -I -c 'import ctypes, sys
 libs = [ctypes.CDLL(p) for p in sys.argv[1:]]
 # dyld_stub_binder (no leading underscore) is the lazy-binding helper of dyld itself.
 print("\n".join(s for s in sys.stdin.read().split() if s.startswith("_") and not any(hasattr(l, s[1:]) for l in libs)))' \
       $(otool -L "$1" | awk 'NR>1{print $1}')
+}
+
+# Linux: the .so's undefined (not weak) dynamic symbols, without their version, minus those PHP's
+# binary exports, minus those its NEEDED libraries (glibc only, see check-linux.sh) have.
+missing_symbols_elf() {
+  comm -23 <(nm -D --undefined-only "$1" | awk '$1 == "U" {sub(/@.*/, "", $2); print $2}' | sort -u) \
+      <(nm -D --defined-only "$2" | awk '{sub(/@.*/, "", $3); print $3}' | sort -u) |
+    /usr/bin/python3 -I -c 'import ctypes, sys
+libs = [ctypes.CDLL(p) for p in sys.argv[1:]]
+print("\n".join(s for s in sys.stdin.read().split() if not any(hasattr(l, s) for l in libs)))' \
+      $(readelf -d "$1" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')
 }
 
 build_one() {
@@ -98,25 +127,31 @@ build_one() {
 
   prepare
   (cd "$SRC" && run "$NAME-phpize" phpize &&
-    run "$NAME-configure" ./configure --with-php-config="$BR/bin/php-config" ${ARGS[@]+"${ARGS[@]}"} &&
-    run "$NAME-make" make -j"$(sysctl -n hw.ncpu)")
+    run "$NAME-configure" env ${BUILD_ENV[@]+"${BUILD_ENV[@]}"} ./configure --with-php-config="$BR/bin/php-config" ${ARGS[@]+"${ARGS[@]}"} &&
+    run "$NAME-make" make -j"$JOBS")
 
-  PKG="ext-$NAME-$VERSION-php$PHP_VER-darwin-$ARCH"
+  PKG="ext-$NAME-$VERSION-php$PHP_VER-$OS-$ARCH"
   STAGE="$WORK/stage/$PKG"
   SO="$STAGE/$NAME.so"
   rm -rf "$STAGE" && mkdir -p "$STAGE/LICENSES"
   cp "$SRC/modules/$NAME.so" "$SO"
-  # Build paths must not ship: drop rpaths into the build root, then strip and sign (Devid D-010).
-  for p in $(otool -l "$SO" | awk '/cmd LC_RPATH/{getline; getline; print $2}'); do install_name_tool -delete_rpath "$p" "$SO"; done
-  strip -x "$SO"
-  codesign --force --sign - "$SO"
-
   # Checks that must hold for every shipped extension; capture output first (see build-php.sh).
   local links missing m
-  links="$(otool -L "$SO" | awk 'NR>1{print $1}')"
-  fail_unless "links a library outside /usr/lib and /System: $links" \
-    test -z "$(grep -vE '^(/usr/lib/|/System/)' <<<"$links" || true)"
-  fail_unless "still has an LC_RPATH" test -z "$(otool -l "$SO" | grep LC_RPATH || true)"
+  if [ "$OS" = darwin ]; then
+    # Build paths must not ship: drop rpaths into the build root, then strip and sign (Devid D-010).
+    for p in $(otool -l "$SO" | awk '/cmd LC_RPATH/{getline; getline; print $2}'); do install_name_tool -delete_rpath "$p" "$SO"; done
+    strip -x "$SO"
+    codesign --force --sign - "$SO"
+    links="$(otool -L "$SO" | awk 'NR>1{print $1}')"
+    fail_unless "links a library outside /usr/lib and /System: $links" \
+      test -z "$(grep -vE '^(/usr/lib/|/System/)' <<<"$links" || true)"
+    fail_unless "still has an LC_RPATH" test -z "$(otool -l "$SO" | grep LC_RPATH || true)"
+  else
+    strip --strip-unneeded "$SO"
+    links="$(readelf -d "$SO" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')"
+    # glibc only, nothing newer than GLIBC_MIN, no rpath.
+    fail_unless "fails the Linux checks" "$ROOT/scripts/check-linux.sh" "$GLIBC_MIN" "$SO"
+  fi
   for b in "$PHP" "$FPM"; do
     missing="$(missing_symbols "$SO" "$b")"
     fail_unless "symbols neither $(basename "$b") nor a system library provides: $(head -5 <<<"$missing" | tr '\n' ' ')" test -z "$missing"
@@ -156,10 +191,11 @@ json.dump({"name": a[2], "version": a[3], "php": a[4], "php_api": a[5], "type": 
     echo "$NAME $VERSION"
     echo "php $FULL (api $PHP_API)"
     echo "arch $ARCH"
-    echo "macos_min $MACOSX_DEPLOYMENT_TARGET"
+    if [ "$OS" = darwin ]; then echo "macos_min $MACOSX_DEPLOYMENT_TARGET"; else echo "glibc_min $GLIBC_MIN ($SPC_TARGET)"; fi
     echo "source $SOURCE${SOURCE_SHA256:+ (sha256 $SOURCE_SHA256)}"
     echo "links $(tr '\n' ' ' <<<"$links")"
-    echo "built $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(sw_vers -productVersion)"
+    if [ "$OS" = darwin ]; then echo "built $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(sw_vers -productVersion)"
+    else echo "built $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(. /etc/os-release && echo "$PRETTY_NAME")"; fi
   } > "$STAGE/BUILDINFO"
   tar -C "$STAGE" -czf "$DIST/$PKG.tar.gz" .
   ls -lh "$DIST/$PKG.tar.gz"

@@ -12,10 +12,12 @@ ARGS=(--enable-swoole --enable-sockets --enable-mysqlnd --enable-cares --enable-
 prepare() {
   spc_libs zlib,openssl,brotli,nghttp2,libcares,curl
   # configure's link checks need the static libraries' dependencies (LIBS). The .so also needs brotli,
-  # which swoole's build does not add itself, and the frameworks the static libcurl uses for macOS
+  # which swoole's build does not add itself, and on macOS the frameworks the static libcurl uses for
   # proxy settings (LDFLAGS).
+  local frameworks=""
+  [ "$OS" = linux ] || frameworks="-framework CoreFoundation -framework SystemConfiguration"
   ARGS+=("LIBS=$(pkg-config --static --libs libcurl libcares libbrotlienc libbrotlidec libnghttp2 openssl zlib)"
-    "LDFLAGS=-L$BR/lib -lbrotlienc -lbrotlidec -lbrotlicommon -framework CoreFoundation -framework SystemConfiguration")
+    "LDFLAGS=-L$BR/lib -lbrotlienc -lbrotlidec -lbrotlicommon $frameworks")
 }
 SMOKE='check(version_compare(swoole_version(), "6.0", ">="), "version");
 $got = [];

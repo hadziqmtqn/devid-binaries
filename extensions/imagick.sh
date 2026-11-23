@@ -31,17 +31,25 @@ build_imagemagick() {
     return 1
   }
   # spc's ImageMagick options, plus libxml2 for SVG (D-024). Delegates that are not built here are
-  # off explicitly, so a library on the build machine can never slip in.
+  # off explicitly, so a library on the build machine can never slip in. Linux: the zig of
+  # build-ext.sh (BUILD_ENV), for the same glibc as PHP.
+  local cc
+  if [ "$OS" = darwin ]; then
+    cc=(CC=clang CXX=clang++ "CFLAGS=-I$BR/include --target=$ARCH-apple-darwin -Os"
+      "CXXFLAGS=-I$BR/include --target=$ARCH-apple-darwin -Os")
+  else
+    cc=("CC=$ZIG cc -target $SPC_TARGET" "CXX=$ZIG c++ -target $SPC_TARGET"
+      "CFLAGS=-I$BR/include -Os -Wno-date-time" "CXXFLAGS=-I$BR/include -Os -Wno-date-time")
+  fi
   (cd "$src" && run imagemagick-configure ./configure --enable-static --disable-shared --prefix="$BR" \
     --with-pic --enable-pic --disable-openmp --without-x --without-magick-plus-plus --without-perl \
     --with-bzlib --with-freetype --with-heic --with-jpeg --with-jxl --with-png --with-tiff --with-webp --with-xml --with-zlib \
     --without-djvu --without-dmr --without-fontconfig --without-gvc --without-jbig --without-lcms --without-lqr \
     --without-lzma --without-openexr --without-openjp2 --without-pango --without-raqm --without-raw \
     --without-zip --without-zstd \
-    CC=clang CXX=clang++ "CFLAGS=-I$BR/include --target=$ARCH-apple-darwin -Os" \
-    "CXXFLAGS=-I$BR/include --target=$ARCH-apple-darwin -Os" "LDFLAGS=-L$BR/lib" "LIBS=-liconv -lresolv" \
+    "${cc[@]}" "LDFLAGS=-L$BR/lib" "LIBS=-liconv -lresolv" \
     "PKG_CONFIG=$(command -v pkg-config) --static" &&
-    run imagemagick-make make -j"$(sysctl -n hw.ncpu)" &&
+    run imagemagick-make make -j"$JOBS" &&
     run imagemagick-install make install)
   echo "$want" > "$stamp"
 }
