@@ -63,7 +63,11 @@ run() {
 
 # fetch <url> <sha256> <file>: download once, and refuse a file whose checksum does not match.
 fetch() {
-  [ -f "$3" ] || { curl -fsSL --retry 3 -o "$3.part" "$1" && mv "$3.part" "$3"; }
+  if [ ! -f "$3" ]; then
+    # --retry-delay: a runner's DNS once failed for longer than curl's own back-off.
+    curl -fsSL --retry 5 --retry-delay 10 -o "$3.part" "$1" || { echo "FAIL: cannot download $1" >&2; return 1; }
+    mv "$3.part" "$3"
+  fi
   echo "$2  $3" | shasum -a 256 -c - >/dev/null || { echo "FAIL: $1 does not match its pinned sha256" >&2; rm -f "$3"; return 1; }
 }
 
