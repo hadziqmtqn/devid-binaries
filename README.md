@@ -45,15 +45,19 @@ curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-
 
 | Asset | Contents |
 |---|---|
-| `php-<version>-darwin-<arch>.tar.gz` | `php`, `php-fpm`, `modules/xdebug.so`, `modules/pcov.so`, `LICENSES/`, `BUILDINFO` |
-| `nginx-<version>-darwin-<arch>.tar.gz` | `nginx` (OpenSSL, zlib and PCRE2 linked statically), `LICENSES/`, `BUILDINFO` |
-| `ext-<name>-<version>-php<minor>-darwin-<arch>.tar.gz` | one PHP extension built for that PHP release: `<name>.so`, `ext.json` (type, PHP API, license, source and the environment it needs), `LICENSES/`, `BUILDINFO`; imagick also has `etc/` (`policy.xml`, `type.xml`) |
-| `caddy-<version>-darwin-<arch>.tar.gz` | the **official** Caddy macOS build, unmodified and checked against Caddy's published SHA-512, plus its license and `BUILDINFO` |
-| `mailpit-<version>-darwin-<arch>.tar.gz` | the **official** Mailpit macOS build (Devid's mail catcher), unmodified and checked against the SHA-256 GitHub records for the release asset, since Mailpit publishes no checksums; plus its license and `BUILDINFO` |
+| `php-<version>-<os>-<arch>.tar.gz` | `php`, `php-fpm`, `modules/xdebug.so`, `modules/pcov.so`, `LICENSES/`, `BUILDINFO` |
+| `nginx-<version>-<os>-<arch>.tar.gz` | `nginx` (OpenSSL, zlib and PCRE2 linked statically), `LICENSES/`, `BUILDINFO` |
+| `ext-<name>-<version>-php<minor>-<os>-<arch>.tar.gz` | one PHP extension built for that PHP release: `<name>.so`, `ext.json` (type, PHP API, license, source and the environment it needs), `LICENSES/`, `BUILDINFO`; imagick also has `etc/` (`policy.xml`, `type.xml`) |
+| `caddy-<version>-<os>-<arch>.tar.gz` | the **official** Caddy build, unmodified and checked against Caddy's published SHA-512, plus its license and `BUILDINFO` |
+| `mailpit-<version>-<os>-<arch>.tar.gz` | the **official** Mailpit build (Devid's mail catcher), unmodified and checked against the SHA-256 GitHub records for the release asset, since Mailpit publishes no checksums; plus its license and `BUILDINFO` |
 | `manifest.json` | every asset with its version, URL, SHA-256 and size (read by Devid) |
 | `checksums.txt` | `shasum -a 256` format |
 
-`<arch>` is `x86_64` (Intel) or `arm64` (Apple silicon). Each is built natively on its own GitHub runner.
+`<os>-<arch>` is one of:
+- `darwin-x86_64` (Intel Macs) or `darwin-arm64` (Apple silicon), each built natively on its own GitHub runner;
+- `linux-x86_64`, built on Ubuntu for Devid's Linux port (Devid D-057, in progress: no Devid release uses these builds yet). PHP and the extensions are built with static-php-cli's zig toolchain for glibc 2.17 and later, so they run on Ubuntu 22.04 and later and Debian 12 and later, and they load `.so` files. nginx is fully static (musl).
+
+In `manifest.json`, macOS builds are under the arch keys `x86_64` and `arm64`, and Linux builds under `linux-x86_64`.
 
 The PHP builds include these extensions: bcmath, ctype, curl, dom, exif, fileinfo, filter, gd, iconv, intl, mbstring, mysqli, opcache, openssl, pcntl, pdo, pdo_mysql, pdo_pgsql, pdo_sqlite, pgsql, phar, posix, readline, redis, session, simplexml, soap, sockets, sodium, sqlite3, tokenizer, xml, xmlreader, xmlwriter, zip, zlib.
 
@@ -87,13 +91,15 @@ Each extension is a recipe in `extensions/<name>.sh`: the upstream release with 
 - `scripts/mirror-caddy.sh` downloads the official Caddy release and verifies its SHA-512 (no rebuild).
 - `scripts/mirror-mailpit.sh` downloads the official Mailpit release and verifies it against GitHub's SHA-256 digest of the asset (no rebuild).
 - `scripts/manifest.py` writes `manifest.json` and `checksums.txt`.
-- `.github/workflows/release.yml` builds on GitHub's `macos-15-intel` (x86_64) and `macos-15` (arm64) runners and publishes the release.
+- `.github/workflows/release.yml` builds on GitHub's `macos-15-intel` (x86_64), `macos-15` (arm64) and `ubuntu-24.04` (Linux x86_64) runners and publishes the release.
 
 Every build fails if a binary links anything from `/usr/local` or `/opt/homebrew` (Homebrew), if Xdebug does not load, or if a required extension is missing. Every extension build also fails if:
 - the `.so` links a library outside `/usr/lib` and `/System`, or keeps an rpath into the build machine;
 - one of its undefined symbols is in neither PHP's binary nor a linked system library;
 - it does not load in `php` and `php-fpm`, with and without Xdebug;
 - its smoke test fails.
+
+On Linux, `scripts/check-linux.sh` replaces the macOS link checks: every binary and `.so` may need only glibc's own libraries, no glibc symbol newer than 2.17 and no rpath, and nginx must be fully static. PHP, php-fpm and nginx must also run on an older CPU (QEMU's Nehalem), since a build for the build machine's CPU once crashed on older ones.
 
 ## Updates
 

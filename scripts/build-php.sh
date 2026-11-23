@@ -1,7 +1,7 @@
 #!/bin/bash
-# Build static PHP (cli + fpm) for macOS with static-php-cli, plus xdebug/pcov as .so files,
-# and package it for Devid.
-#   PHP_VER=8.4 scripts/build-php.sh      -> dist/php-8.4.x-darwin-<arch>.tar.gz
+# Build static PHP (cli + fpm) with static-php-cli, plus xdebug/pcov as .so files, and package it
+# for Devid: on macOS for the runner's arch, on Linux for x86_64 with glibc (Devid D-057).
+#   PHP_VER=8.4 scripts/build-php.sh      -> dist/php-8.4.x-<os>-<arch>.tar.gz (os: darwin or linux)
 # The archive root holds php, php-fpm, modules/*.so, LICENSES/ and BUILDINFO, the layout
 # `devid php install --from <dir>` expects.
 set -euo pipefail
@@ -11,6 +11,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="${WORK:-$ROOT/work}"      # spc, downloads, source, buildroot (cacheable)
 DIST="${DIST:-$ROOT/dist}"
 ARCH="$(uname -m)"
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"   # darwin or linux
 
 # mysqli (CodeIgniter 4, WordPress), readline (tinker, php -a) and soap: Devid D-022.
 EXT="bcmath,ctype,curl,dom,exif,fileinfo,filter,gd,iconv,intl,mbstring,mysqli,opcache,openssl,pcntl,pdo,pdo_mysql,pdo_pgsql,pdo_sqlite,pgsql,phar,posix,readline,redis,session,simplexml,soap,sockets,sodium,sqlite3,tokenizer,xml,xmlreader,xmlwriter,zip,zlib"
@@ -20,18 +21,32 @@ SHARED="xdebug,pcov"
 XDEBUG_URL="https://pecl.php.net/get/xdebug-3.5.3.tgz"
 # Compiled-in ini paths must not point at Homebrew's /usr/local/etc/php; Devid sets PHPRC anyway.
 INI_DIR=/opt/devid/etc/php
+# Linux (Devid Phase 12 L1): glibc, so the .so files load (a static musl PHP cannot load any), and
+# 2.17, so every distro since 2014 runs it. The arch is spelled out: zig's "native" builds for the
+# build machine's CPU, and such a PHP died with SIGILL on older CPUs.
+GLIBC_MIN=2.17
 
 mkdir -p "$WORK" "$DIST"
 "$ROOT/scripts/fetch-spc.sh" "$WORK"
 cd "$WORK"
 
-# Keep Homebrew out of the build: no pkg-config paths, and SDKROOT makes clang/ld skip
-# /usr/local/include and /usr/local/lib (Homebrew's openssl headers once broke the link).
-# On Apple silicon Homebrew is in /opt/homebrew, which clang never searches.
-unset PKG_CONFIG_PATH
-export SDKROOT="$(xcrun --show-sdk-path)"
-# Build for the oldest macOS Devid supports, whatever the CI runner's version is.
-export MACOSX_DEPLOYMENT_TARGET=12.0
+case "$OS" in
+  darwin)
+    # Keep Homebrew out of the build: no pkg-config paths, and SDKROOT makes clang/ld skip
+    # /usr/local/include and /usr/local/lib (Homebrew's openssl headers once broke the link).
+    # On Apple silicon Homebrew is in /opt/homebrew, which clang never searches.
+    unset PKG_CONFIG_PATH
+    export SDKROOT="$(xcrun --show-sdk-path)"
+    # Build for the oldest macOS Devid supports, whatever the CI runner's version is.
+    export MACOSX_DEPLOYMENT_TARGET=12.0
+    ;;
+  linux)
+    [ "$ARCH" = x86_64 ] || { echo "FAIL: Linux builds are x86_64 only for now (Devid D-057)" >&2; exit 1; }
+    unset PKG_CONFIG_PATH
+    export SPC_TARGET="x86_64-linux-gnu.$GLIBC_MIN"   # spc builds with zig; `doctor --auto-fix` installs it
+    ;;
+  *) echo "FAIL: unsupported OS $OS" >&2; exit 1 ;;
+esac
 
 ./spc doctor --auto-fix
 ./spc download --with-php="$PHP_VER" --for-extensions="$EXT,$SHARED" \
@@ -40,7 +55,7 @@ export MACOSX_DEPLOYMENT_TARGET=12.0
   --with-config-file-path="$INI_DIR" --with-config-file-scan-dir="$INI_DIR/conf.d"
 
 FULL="$(buildroot/bin/php -n -r 'echo PHP_VERSION;')"
-NAME="php-$FULL-darwin-$ARCH"
+NAME="php-$FULL-$OS-$ARCH"
 STAGE="$WORK/stage/$NAME"
 rm -rf "$STAGE" && mkdir -p "$STAGE/modules"
 cp buildroot/bin/php buildroot/bin/php-fpm "$STAGE/"
@@ -50,26 +65,43 @@ cp buildroot/modules/xdebug.so buildroot/modules/pcov.so "$STAGE/modules/"
 # Checks that must hold for every shipped build. Capture output first: with pipefail,
 # `cmd | grep -q` fails when grep exits early and cmd gets SIGPIPE, which made these checks
 # flaky in CI and could hide a /usr/local link.
-links="$(otool -L "$STAGE/php" "$STAGE/php-fpm" "$STAGE"/modules/*.so)"
-if grep -qE '/usr/local|/opt/homebrew' <<<"$links"; then
-  echo "FAIL: links Homebrew (/usr/local or /opt/homebrew) libraries" >&2; echo "$links" >&2; exit 1
+if [ "$OS" = darwin ]; then
+  links="$(otool -L "$STAGE/php" "$STAGE/php-fpm" "$STAGE"/modules/*.so)"
+  if grep -qE '/usr/local|/opt/homebrew' <<<"$links"; then
+    echo "FAIL: links Homebrew (/usr/local or /opt/homebrew) libraries" >&2; echo "$links" >&2; exit 1
+  fi
+else
+  "$ROOT/scripts/check-linux.sh" "$GLIBC_MIN" "$STAGE/php" "$STAGE/php-fpm" "$STAGE"/modules/*.so
+  # Older CPUs: QEMU's Nehalem (x86-64-v2) is the oldest these builds promise.
+  qemu="$(qemu-x86_64 -cpu Nehalem "$STAGE/php" -n -d zend_extension="$STAGE/modules/xdebug.so" -v 2>&1)" ||
+    { echo "FAIL: php does not run on a Nehalem CPU: $qemu" >&2; exit 1; }
+  qemu="$(qemu-x86_64 -cpu Nehalem "$STAGE/php-fpm" -n -v 2>&1)" ||
+    { echo "FAIL: php-fpm does not run on a Nehalem CPU: $qemu" >&2; exit 1; }
 fi
 version="$("$STAGE/php" -n -d zend_extension="$STAGE/modules/xdebug.so" -v)"
 grep -q Xdebug <<<"$version" || { echo "FAIL: xdebug.so does not load" >&2; exit 1; }
+version="$("$STAGE/php-fpm" -n -d zend_extension="$STAGE/modules/xdebug.so" -m)"
+grep -qx Xdebug <<<"$version" || { echo "FAIL: xdebug.so does not load in php-fpm" >&2; exit 1; }
 modules="$("$STAGE/php" -n -m)"
 for ext in pdo_pgsql pdo_sqlite intl gd redis sodium zip bcmath mysqli readline soap; do
   grep -qx "$ext" <<<"$modules" || { echo "FAIL: missing extension $ext" >&2; exit 1; }
 done
 
-codesign --force --sign - "$STAGE/php" "$STAGE/php-fpm" "$STAGE"/modules/*.so   # ad-hoc (D-010)
+if [ "$OS" = darwin ]; then
+  codesign --force --sign - "$STAGE/php" "$STAGE/php-fpm" "$STAGE"/modules/*.so   # ad-hoc (D-010)
+  min="macos_min $MACOSX_DEPLOYMENT_TARGET" host="$(sw_vers -productVersion)"
+else
+  zig="$(find "$WORK/pkgroot" -type f -name zig -perm -u+x | head -1)"
+  min="glibc_min $GLIBC_MIN ($SPC_TARGET, zig $("$zig" version))" host="$(. /etc/os-release && echo "$PRETTY_NAME")"
+fi
 {
   echo "php $FULL"
   echo "arch $ARCH"
-  echo "macos_min $MACOSX_DEPLOYMENT_TARGET"
+  echo "$min"
   echo "static-php-cli $(./spc --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
   echo "extensions $EXT"
   echo "shared $SHARED (xdebug 3.5.3)"
-  echo "built $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(sw_vers -productVersion)"
+  echo "built $(date -u +%Y-%m-%dT%H:%M:%SZ) on $host"
 } > "$STAGE/BUILDINFO"
 
 tar -C "$STAGE" -czf "$DIST/$NAME.tar.gz" .

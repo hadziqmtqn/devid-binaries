@@ -13,6 +13,9 @@ Devid reads manifest.json to find, download and verify binaries:
 
 Extension archives (scripts/build-ext.sh) carry ext.json, which must agree with their file name.
 
+"arch" keys: "x86_64" and "arm64" are macOS builds, the keys every Devid release reads; Linux builds
+(Devid D-057) are "linux-x86_64", a key Devid on macOS never looks up.
+
 Usage: scripts/manifest.py --tag 2026.11.02 [--dist dist] [--repo owner/name]
        scripts/manifest.py --self-test
 """
@@ -27,21 +30,26 @@ import tarfile
 from datetime import datetime, timezone
 
 # php-8.4.27-darwin-x86_64.tar.gz / nginx-1.30.6-darwin-x86_64.tar.gz / caddy-2.11.7-darwin-x86_64.tar.gz
-# / mailpit-1.33.1-darwin-arm64.tar.gz
-NAME = re.compile(r"^(?P<tool>php|nginx|caddy|mailpit)-(?P<version>\d+\.\d+\.\d+)-darwin-(?P<arch>x86_64|arm64)\.tar\.gz$")
+# / mailpit-1.33.1-darwin-arm64.tar.gz / php-8.4.28-linux-x86_64.tar.gz
+NAME = re.compile(r"^(?P<tool>php|nginx|caddy|mailpit)-(?P<version>\d+\.\d+\.\d+)-(?P<os>darwin|linux)-(?P<arch>x86_64|arm64)\.tar\.gz$")
 # ext-apcu-5.1.28-php8.4-darwin-x86_64.tar.gz
-EXT = re.compile(r"^ext-(?P<name>[a-z0-9_]+)-(?P<version>\d[\w.+]*(?:-\d[\w.+]*)*?)-php(?P<php>\d+\.\d+)-darwin-(?P<arch>x86_64|arm64)\.tar\.gz$")
+EXT = re.compile(r"^ext-(?P<name>[a-z0-9_]+)-(?P<version>\d[\w.+]*(?:-\d[\w.+]*)*?)-php(?P<php>\d+\.\d+)-(?P<os>darwin|linux)-(?P<arch>x86_64|arm64)\.tar\.gz$")
 EXT_FIELDS = ("version", "type", "file", "php_api", "license", "source", "source_sha256", "env")
+
+
+def key(m):
+    """The manifest's "arch" key: the bare arch for macOS, which every Devid reads; os-arch otherwise."""
+    return m["arch"] if m["os"] == "darwin" else f"{m['os']}-{m['arch']}"
 
 
 def parse(name):
     m = NAME.match(name)
-    return (m["tool"], m["version"], m["arch"]) if m else None
+    return (m["tool"], m["version"], key(m)) if m else None
 
 
 def parse_ext(name):
     m = EXT.match(name)
-    return (m["name"], m["version"], m["php"], m["arch"]) if m else None
+    return (m["name"], m["version"], m["php"], key(m)) if m else None
 
 
 def ext_info(path, name, version, php):
@@ -120,7 +128,9 @@ def self_test():
     assert parse("php-8.4.27-darwin-x86_64.tar.gz") == ("php", "8.4.27", "x86_64")
     assert parse("nginx-1.30.6-darwin-arm64.tar.gz") == ("nginx", "1.30.6", "arm64")
     assert parse("mailpit-1.33.1-darwin-arm64.tar.gz") == ("mailpit", "1.33.1", "arm64")
-    assert parse("php-8.4.27-linux-x86_64.tar.gz") is None
+    assert parse("php-8.4.28-linux-x86_64.tar.gz") == ("php", "8.4.28", "linux-x86_64")
+    assert parse("php-8.4.28-windows-x86_64.tar.gz") is None
+    assert parse_ext("ext-apcu-5.1.28-php8.4-linux-x86_64.tar.gz") == ("apcu", "5.1.28", "8.4", "linux-x86_64")
     assert parse("evil-1.0.0-darwin-x86_64.tar.gz") is None
     assert parse_ext("ext-apcu-5.1.28-php8.4-darwin-x86_64.tar.gz") == ("apcu", "5.1.28", "8.4", "x86_64")
     assert parse_ext("ext-ldap-8.4.27-php8.4-darwin-arm64.tar.gz") == ("ldap", "8.4.27", "8.4", "arm64")
@@ -164,6 +174,23 @@ def self_test():
         assert a["version"] == "5.1.28" and a["type"] == "extension" and a["php_api"] == "20240924"
         assert a["arch"]["x86_64"]["url"].endswith("/t1/ext-apcu-5.1.28-php8.4-darwin-x86_64.tar.gz")
         assert sums.count("\n") == 4
+        # Linux builds join the same entries under "linux-x86_64"; the macOS keys stay as they were.
+        (pathlib.Path(d) / "php-8.4.27-linux-x86_64.tar.gz").write_bytes(b"linux php")
+        (pathlib.Path(d) / "nginx-1.30.6-linux-x86_64.tar.gz").write_bytes(b"linux nginx")
+        ext_archive(d, "ext-apcu-5.1.28-php8.4-linux-x86_64.tar.gz", good)
+        m, sums = build(d, "t1", "o/r")
+        assert set(m["php"]["8.4"]["arch"]) == {"x86_64", "linux-x86_64"}
+        assert m["php"]["8.4"]["arch"]["x86_64"]["url"].endswith("/php-8.4.27-darwin-x86_64.tar.gz")
+        assert m["php"]["8.4"]["arch"]["linux-x86_64"]["url"].endswith("/php-8.4.27-linux-x86_64.tar.gz")
+        assert set(m["nginx"]["arch"]) == {"x86_64", "linux-x86_64"}
+        assert set(m["extensions"]["8.4"]["apcu"]["arch"]) == {"x86_64", "linux-x86_64"}
+        assert sums.count("\n") == 7
+        (pathlib.Path(d) / "php-8.5.13-linux-x86_64.tar.gz").write_bytes(b"newer linux php")
+        try:
+            build(d, "t1", "o/r")  # PHP 8.5 is 8.5.12 on macOS: one release, one version per minor
+            raise AssertionError("two PHP 8.5 versions were accepted")
+        except SystemExit:
+            pass
 
     def refused(info, file_name="ext-apcu-5.1.28-php8.4-darwin-x86_64.tar.gz", php="php-8.4.27-darwin-x86_64.tar.gz"):
         with tempfile.TemporaryDirectory() as d:

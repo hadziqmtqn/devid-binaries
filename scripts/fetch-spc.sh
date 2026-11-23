@@ -3,10 +3,12 @@
 set -euo pipefail
 WORK="${1:?usage: fetch-spc.sh <work dir>}"
 SPC_VERSION=2.8.5
-case "$(uname -m)" in
-  x86_64) SPC_ASSET=spc-macos-x86_64.tar.gz SPC_SHA256=e8b798048f62ca4960764196543b60ae703f7174aa418824cf542aeec1d2cd6a ;;
-  arm64) SPC_ASSET=spc-macos-aarch64.tar.gz SPC_SHA256=acf2f25d56d0cbf8e65aa82e5054fef555f7be7c5c38046c6e0819f266d83225 ;;
-  *) echo "no static-php-cli pinned for $(uname -m)" >&2; exit 1 ;;
+case "$(uname -s)-$(uname -m)" in
+  Darwin-x86_64) SPC_ASSET=spc-macos-x86_64.tar.gz SPC_SHA256=e8b798048f62ca4960764196543b60ae703f7174aa418824cf542aeec1d2cd6a ;;
+  Darwin-arm64) SPC_ASSET=spc-macos-aarch64.tar.gz SPC_SHA256=acf2f25d56d0cbf8e65aa82e5054fef555f7be7c5c38046c6e0819f266d83225 ;;
+  # GitHub's digest of the release asset (Devid Phase 12 L1).
+  Linux-x86_64) SPC_ASSET=spc-linux-x86_64.tar.gz SPC_SHA256=523ba4279c54c7a377156c0dd3a36adf92ee64b01e9a7f5e9e2ec084b8e458e5 ;;
+  *) echo "no static-php-cli pinned for $(uname -s) $(uname -m)" >&2; exit 1 ;;
 esac
 mkdir -p "$WORK"
 cd "$WORK"
