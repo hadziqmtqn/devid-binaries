@@ -15,6 +15,10 @@ on:
       recipes:
         description: "Recipe names, space-separated (default: all)"
         required: false
+      build_php:
+        description: "Build PHP instead of using the one in the release cache"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -52,9 +56,21 @@ jobs:
           restore-keys: php-${{ matrix.target.key }}-${{ matrix.php }}-
       - if: matrix.target.os == 'linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user patchelf gdb
-      - run: PHP_VER=${{ matrix.php }} scripts/build-php.sh
+      - name: PHP
         env:
+          BASE: ${{ github.base_ref }}
+          BUILD_PHP: ${{ inputs.build_php }}
+          PHP_VER: ${{ matrix.php }}
           GITHUB_TOKEN: ${{ github.token }}   # spc download: the anonymous API limit runs out with six jobs
+        run: |
+          # Recipes are tested against the cached PHP that last shipped (REUSE_PHP in build-php.sh),
+          # not a new build, unless a PR changes how PHP is built or a manual run asks for one.
+          changed=""
+          [ -z "$BASE" ] || changed="$(git diff --name-only "origin/$BASE...HEAD")"
+          if [ "$BUILD_PHP" != true ] && ! grep -qxE 'scripts/(build-php|fetch-spc|check-linux)\.sh' <<<"$changed"; then
+            export REUSE_PHP=1
+          fi
+          scripts/build-php.sh
       - name: Which recipes
         id: which
         env:
