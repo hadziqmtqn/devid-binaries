@@ -147,6 +147,8 @@ build_one() {
       test -z "$(grep -vE '^(/usr/lib/|/System/)' <<<"$links" || true)"
     fail_unless "still has an LC_RPATH" test -z "$(otool -l "$SO" | grep LC_RPATH || true)"
   else
+    # Build paths must not ship (a runpath into the build root), then strip.
+    patchelf --remove-rpath "$SO"
     strip --strip-unneeded "$SO"
     links="$(readelf -d "$SO" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')"
     # glibc only, nothing newer than GLIBC_MIN, no rpath.

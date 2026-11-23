@@ -51,7 +51,7 @@ jobs:
           key: php-${{ matrix.target.key }}-${{ matrix.php }}-${{ hashFiles('scripts/build-php.sh', 'scripts/fetch-spc.sh', 'scripts/build-ext.sh', 'scripts/check-linux.sh', 'extensions/**') }}
           restore-keys: php-${{ matrix.target.key }}-${{ matrix.php }}-
       - if: matrix.target.os == 'linux'
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user patchelf
       - run: PHP_VER=${{ matrix.php }} scripts/build-php.sh
         env:
           GITHUB_TOKEN: ${{ github.token }}   # spc download: the anonymous API limit runs out with six jobs
