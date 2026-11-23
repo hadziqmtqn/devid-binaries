@@ -77,7 +77,7 @@ The PHP builds include these extensions: bcmath, ctype, curl, dom, exif, fileinf
 Each extension is a recipe in `extensions/<name>.sh`: the upstream release with a pinned SHA-256, its configure options and a smoke test.
 
 **Adding or updating one** is a pull request with its recipe:
-- `.github/workflows/catalog.yml` builds and tests the changed recipes for PHP 8.3, 8.4 and 8.5 with `build-ext.sh`'s checks, publishing nothing. It reads the release cache but never writes it.
+- `.github/workflows/catalog.yml` builds and tests the changed recipes for PHP 8.3, 8.4 and 8.5 with `build-ext.sh`'s checks, publishing nothing. It reads the release cache but never writes it, and it uses the PHP in that cache (`REUSE_PHP=1`) instead of building PHP again, unless the pull request changes how PHP is built or a manual run sets `build_php`.
 - Once the PR is merged, the same workflow starts "Build and release", so the extension ships without a Devid release.
 - `workflow_dispatch` builds named recipes on demand.
 

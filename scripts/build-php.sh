@@ -4,6 +4,8 @@
 #   PHP_VER=8.4 scripts/build-php.sh      -> dist/php-8.4.x-<os>-<arch>.tar.gz (os: darwin or linux)
 # The archive root holds php, php-fpm, modules/*.so, LICENSES/ and BUILDINFO, the layout
 # `devid php install --from <dir>` expects.
+#   REUSE_PHP=1 PHP_VER=8.4 scripts/build-php.sh   -> no build, no archive: keep the build root's
+#   PHP 8.4 if it has one (a restored release cache) and extract its source, for build-ext.sh
 set -euo pipefail
 
 : "${PHP_VER:?set PHP_VER, e.g. 8.4}"
@@ -49,6 +51,22 @@ case "$OS" in
 esac
 
 ./spc doctor --auto-fix
+
+# Catalog checks of a recipe (catalog.yml) need a PHP to build and load extensions against, not a
+# new one: the release cache holds the PHP that last shipped, and building it again took 12 to 38
+# minutes per job. Its source comes back from the cached download (php-src recipes copy ext/<name>).
+if [ "${REUSE_PHP:-}" = 1 ] && [ -x buildroot/bin/php ] && [ -x buildroot/bin/php-fpm ] && [ -f buildroot/modules/xdebug.so ]; then
+  FULL="$(buildroot/bin/php -n -r 'echo PHP_VERSION;')"
+  if [ "${FULL%.*}" = "$PHP_VER" ]; then
+    ./spc extract php-src --source-only
+    src="$(sed -n 's/^#define PHP_VERSION "\(.*\)"$/\1/p' source/php-src/main/php_version.h)"
+    [ "$src" = "$FULL" ] || { echo "FAIL: the cached download holds php-src $src, the build root PHP $FULL" >&2; exit 1; }
+    echo "Reusing PHP $FULL from the build root (REUSE_PHP=1); nothing built, nothing packaged"
+    exit 0
+  fi
+  echo "The build root holds PHP $FULL, not $PHP_VER: building it"
+fi
+
 ./spc download --with-php="$PHP_VER" --for-extensions="$EXT,$SHARED" \
   --custom-url="xdebug:$XDEBUG_URL" --ignore-cache-sources=php-src,xdebug --retry=3
 ./spc build "$EXT" --build-cli --build-fpm --build-shared="$SHARED" \
