@@ -26,7 +26,7 @@ rm -rf "$WORK" && mkdir -p "$WORK" "$DIST"
 cd "$WORK"
 # shortcut: trusts GitHub's API over HTTPS, as mirror-mailpit.sh does.
 DIGEST="$(python3 "$ROOT/scripts/upstream.py" --digest mongodb-js/mongosh "$TAG" "$ASSET")"
-curl -fsSL --retry 3 -o "$ASSET" "$URL"
+curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$ASSET" "$URL"
 echo "$DIGEST  $ASSET" | shasum -a 256 -c -
 mkdir unpacked
 case "$ASSET" in

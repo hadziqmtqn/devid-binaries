@@ -24,7 +24,7 @@ ASSET="$(basename "$URL")"
 rm -rf "$WORK" && mkdir -p "$WORK" "$DIST"
 cd "$WORK"
 # shortcut: trusts MongoDB's full.json over HTTPS, as mirror-caddy.sh trusts Caddy's checksums file.
-curl -fsSL --retry 3 -o "$ASSET" "$URL"
+curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$ASSET" "$URL"
 echo "$SHA  $ASSET" | shasum -a 256 -c -
 mkdir unpacked && tar -xzf "$ASSET" -C unpacked
 SRC="$(echo unpacked/mongodb-*)"

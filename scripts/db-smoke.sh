@@ -17,6 +17,11 @@ stop() {
 }
 trap stop EXIT
 fail() { echo "FAIL: $NAME: $*" >&2; [ -f "$T/log" ] && tail -40 "$T/log" >&2; exit 1; }
+# On Linux with gdb, run a command that failed again under gdb, for the backtrace of a crash.
+trace() {
+  [ "$(uname -s)" = Linux ] && command -v gdb > /dev/null || return 0
+  gdb -q -batch -ex run -ex bt --args "$@" 2>&1 | tail -30 >&2 || true
+}
 # The archive is unpacked under a path that is not where it was built, so a hard-coded path shows.
 mkdir -p "$T/moved/here" && tar -xzf "$ARCHIVE" -C "$T/moved/here"
 D="$T/moved/here"
@@ -24,8 +29,10 @@ wait_for() { for _ in $(seq 60); do eval "$1" && return 0; kill -0 "$PID" 2>/dev
 
 case "$ENGINE" in
   mysql)
-    "$D/bin/mysqld" --no-defaults --initialize-insecure --basedir="$D" --datadir="$T/data" > "$T/log" 2>&1 ||
+    "$D/bin/mysqld" --no-defaults --initialize-insecure --basedir="$D" --datadir="$T/data" > "$T/log" 2>&1 || {
+      trace "$D/bin/mysqld" --no-defaults --initialize-insecure --basedir="$D" --datadir="$T/data-trace"
       fail "mysqld --initialize-insecure"
+    }
     "$D/bin/mysqld" --no-defaults --basedir="$D" --datadir="$T/data" --port="$PORT" --bind-address=127.0.0.1 \
       --socket="$T/mysql.sock" --mysqlx=OFF --log-error="$T/log" &
     PID=$!
@@ -37,7 +44,10 @@ case "$ENGINE" in
     "$D/bin/mysqladmin" --no-defaults -uroot -h127.0.0.1 -P"$PORT" shutdown || fail "mysqladmin shutdown"
     ;;
   postgresql)
-    "$D/bin/initdb" -D "$T/data" -U postgres -A trust -E UTF8 --locale=C > "$T/log" 2>&1 || fail "initdb"
+    "$D/bin/initdb" -D "$T/data" -U postgres -A trust -E UTF8 --locale=C > "$T/log" 2>&1 || {
+      trace "$D/bin/initdb" -D "$T/data-trace" -U postgres -A trust -E UTF8 --locale=C
+      fail "initdb"
+    }
     "$D/bin/postgres" -D "$T/data" -p "$PORT" -k "$T" -c listen_addresses=127.0.0.1 >> "$T/log" 2>&1 &
     PID=$!
     wait_for '"$D/bin/pg_isready" -q -h 127.0.0.1 -p "$PORT"' || fail "postgres did not start"

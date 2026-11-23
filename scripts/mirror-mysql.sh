@@ -30,9 +30,9 @@ URL="https://cdn.mysql.com/Downloads/MySQL-$SERIES/$ASSET"
 rm -rf "$WORK" && mkdir -p "$WORK" "$DIST"
 cd "$WORK"
 # Oracle's CDN keeps recent releases; older ones move to its archive.
-if ! curl -fsSL --retry 3 -o "$ASSET" "$URL"; then
+if ! curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$ASSET" "$URL"; then
   URL="https://downloads.mysql.com/archives/get/p/23/file/$ASSET"
-  curl -fsSL --retry 3 -o "$ASSET" "$URL"
+  curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$ASSET" "$URL"
 fi
 echo "$SHA  $ASSET" | shasum -a 256 -c -
 mkdir unpacked && tar -xf "$ASSET" -C unpacked
@@ -66,7 +66,7 @@ else
   # Build libaio and libnuma (LGPL-2.1) for lib/private, where mysqld's runpath looks first.
   for lib in libaio numactl; do
     read -r v url sha <<<"$(python3 "$ROOT/scripts/db.py" source "$lib")"
-    curl -fsSL --retry 3 -o "$lib.tar.gz" "$url"
+    curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$lib.tar.gz" "$url"
     echo "$sha  $lib.tar.gz" | shasum -a 256 -c -
     mkdir "$lib-src" && tar -xzf "$lib.tar.gz" -C "$lib-src" --strip-components=1
     echo "$lib $v $url" >> bundled.txt
@@ -78,13 +78,16 @@ else
   zig="$(find "$ROOT/work/pkgroot" -type f -name zig -perm -u+x | head -1)"
   [ -n "$zig" ] || { echo "FAIL: no zig under $ROOT/work/pkgroot" >&2; exit 1; }
   printf '#!/bin/sh\nexec "%s" cc -target x86_64-linux-gnu.2.17 "$@"\n' "$zig" > zigcc && chmod +x zigcc
-  make -C libaio-src -s CC="$WORK/zigcc" > /dev/null
+  # libaio's Makefile names its PIC objects *.os, which zig cc does not take for objects: build the
+  # library from the same sources as *.o (make's built-in rule, with the Makefile's -fPIC).
+  objs="$(sed -n 's/^libaio_srcs [:+]= //p' libaio-src/src/Makefile | tr ' ' '\n' | sed -n 's/\.c$/.o/p' | paste -sd' ' -)"
+  [ -n "$objs" ] || { echo "FAIL: no libaio_srcs in libaio's Makefile" >&2; exit 1; }
+  make -C libaio-src/src -s CC="$WORK/zigcc" libaio_sobjs="$objs" > /dev/null
   cp libaio-src/src/libaio.so.1.0.* "$STAGE/lib/private/libaio.so.1"
   cp libaio-src/COPYING "$STAGE/LICENSES/libaio.txt"
   (cd numactl-src && ./configure --quiet --disable-static CC="$WORK/zigcc" > /dev/null && make -s libnuma.la > /dev/null)
   cp numactl-src/.libs/libnuma.so.1.0.0 "$STAGE/lib/private/libnuma.so.1"
   cp numactl-src/LICENSE.LGPL2.1 "$STAGE/LICENSES/libnuma.txt"
-  strip --strip-unneeded "$STAGE/lib/private/libaio.so.1" "$STAGE/lib/private/libnuma.so.1"
   # Both may need only glibc, no newer than MySQL's own floor.
   "$ROOT/scripts/check-linux.sh" 2.28 "$STAGE/lib/private/libaio.so.1" "$STAGE/lib/private/libnuma.so.1"
   # Every library mysqld and the clients need must be in the archive or in a stock Ubuntu 22.04

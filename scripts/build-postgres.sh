@@ -34,7 +34,7 @@ build_openssl() {
   [ -f "$DEPS/lib/libssl.a" ] && return 0
   (
     cd "$SRC_DIR"
-    [ -f "openssl-$OSSL_VER.tar.gz" ] || curl -fsSL --retry 3 -o "openssl-$OSSL_VER.tar.gz" "$OSSL_URL"
+    [ -f "openssl-$OSSL_VER.tar.gz" ] || curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "openssl-$OSSL_VER.tar.gz" "$OSSL_URL"
     echo "$OSSL_SHA  openssl-$OSSL_VER.tar.gz" | shasum -a 256 -c -
     rm -rf "openssl-$OSSL_VER" && tar xzf "openssl-$OSSL_VER.tar.gz" && cd "openssl-$OSSL_VER"
     CC="$CC" ./Configure "$1" no-shared no-tests no-docs no-apps no-atexit no-thread-pool no-quic \
@@ -80,21 +80,25 @@ cd "$SRC_DIR"
 TARBALL="postgresql-$VER.tar.bz2"
 BASE="https://ftp.postgresql.org/pub/source/v$VER"
 if [ ! -f "$TARBALL" ]; then
-  curl -fsSL --retry 3 -o "$TARBALL" "$BASE/$TARBALL"
+  curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$TARBALL" "$BASE/$TARBALL"
 fi
 # shortcut: trusts the .sha256 file next to the source over HTTPS, as mirror-caddy.sh does.
-SHA="$(curl -fsSL --retry 3 "$BASE/$TARBALL.sha256" | awk '{print $1}')"
+SHA="$(curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors "$BASE/$TARBALL.sha256" | awk '{print $1}')"
 echo "$SHA  $TARBALL" | shasum -a 256 -c -
 rm -rf "postgresql-$VER" && tar xjf "$TARBALL"
 cd "postgresql-$VER"
 
+# Linux links every binary and module with the runpath $ORIGIN/../lib, which from bin/ and from lib/
+# alike is lib/, where libpq is; make's $$ is a $, and PostgreSQL quotes it for the shell. Setting
+# it afterwards with patchelf gave an initdb that ran under QEMU but crashed at once on the runner.
+if [ "$OS" = darwin ]; then RPATH=(--disable-rpath) MAKE_RPATH=(); else RPATH=() MAKE_RPATH=('rpathdir=$$ORIGIN/../lib'); fi
 ./configure CC="$CC" CPPFLAGS="$CPPFLAGS" LDFLAGS="$LDFLAGS" CFLAGS="-O2" \
-  --prefix="$PREFIX" --disable-rpath --with-openssl --with-zlib --without-icu --without-llvm \
+  --prefix="$PREFIX" "${RPATH[@]+"${RPATH[@]}"}" --with-openssl --with-zlib --without-icu --without-llvm \
   "${EXTRA[@]}" > ../configure-$VER.log
 grep -q '^#define USE_OPENSSL 1' src/include/pg_config.h || { echo "FAIL: built without OpenSSL" >&2; exit 1; }
-make -j"$JOBS" world-bin > ../make-$VER.log 2>&1 || { tail -40 ../make-$VER.log >&2; exit 1; }
+make -j"$JOBS" "${MAKE_RPATH[@]+"${MAKE_RPATH[@]}"}" world-bin > ../make-$VER.log 2>&1 || { tail -40 ../make-$VER.log >&2; exit 1; }
 rm -rf "$WORK/postgresql/destdir"
-make install-world-bin DESTDIR="$WORK/postgresql/destdir" > /dev/null
+make "${MAKE_RPATH[@]+"${MAKE_RPATH[@]}"}" install-world-bin DESTDIR="$WORK/postgresql/destdir" > /dev/null
 
 NAME="postgresql-$VER-$OS-$ARCH"
 STAGE="$WORK/stage/$NAME"
@@ -131,11 +135,13 @@ else
   fail=0
   while read -r f; do
     file -b "$f" | grep -q ELF || continue
-    strip --strip-unneeded "$f"
     needed="$(objdump -p "$f" | awk '/NEEDED/ {print $2}')"
-    if grep -qE "^($bundled)$" <<<"$needed"; then
-      rel="$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1], os.path.dirname(sys.argv[2])))' "$STAGE/lib" "$f")"
-      patchelf --set-rpath "\$ORIGIN/$rel" "$f"
+    runpath="$(objdump -p "$f" | awk '/RUNPATH|RPATH/ {print $2}')"
+    if [ -n "$runpath" ] && [ "$runpath" != '$ORIGIN/../lib' ]; then
+      echo "FAIL: $f has the runpath $runpath" >&2; fail=1
+    fi
+    if grep -qE "^($bundled)$" <<<"$needed" && [ -z "$runpath" ]; then
+      echo "FAIL: $f needs libpq but has no runpath" >&2; fail=1
     fi
     other="$(grep -vxE "lib(c|m|dl|pthread|rt|util|resolv)\.so\.[0-9]+|ld-linux-x86-64\.so\.2|$bundled" <<<"$needed" || true)"
     [ -z "$other" ] || { echo "FAIL: $f links libraries outside glibc: $(tr '\n' ' ' <<<"$other")" >&2; fail=1; }
