@@ -99,7 +99,7 @@ Every build fails if a binary links anything from `/usr/local` or `/opt/homebrew
 - it does not load in `php` and `php-fpm`, with and without Xdebug;
 - its smoke test fails.
 
-On Linux, `scripts/check-linux.sh` replaces the macOS link checks: every binary and `.so` may need only glibc's own libraries, no glibc symbol newer than 2.17 and no rpath, and nginx must be fully static. PHP, php-fpm and nginx must also run on an older CPU (QEMU's Nehalem), since a build for the build machine's CPU once crashed on older ones. Every Linux extension is linked with `-z nodelete`, so the exit handlers of the libraries inside it still run after PHP unloads it, and with `-Bsymbolic`, so it uses its own copies of those libraries rather than PHP's.
+On Linux, `scripts/check-linux.sh` replaces the macOS link checks: every binary and `.so` may need only glibc's own libraries, no glibc symbol newer than 2.17 and no rpath, and nginx must be fully static. PHP, php-fpm and nginx must also run on an older CPU (QEMU's Nehalem), since a build for the build machine's CPU once crashed on older ones, and each extension's smoke test runs there too. The Linux load checks set `LD_BIND_NOW`, so a missing symbol, or one only in another glibc version, fails the load at once. Every Linux extension is linked with `-z nodelete`, so the exit handlers of the libraries inside it still run after PHP unloads it, and with `-Bsymbolic`, so it uses its own copies of those libraries rather than PHP's.
 
 ## Updates
 

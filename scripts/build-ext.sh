@@ -75,29 +75,26 @@ spc_libs() {
 # fail_unless <description> <command...>
 fail_unless() { local what="$1"; shift; "$@" || { echo "FAIL: $NAME: $what" >&2; return 1; }; }
 
-# The .so is a flat-namespace bundle (macOS) or a shared object (Linux): every undefined symbol is
-# looked up at load time in PHP's binary or a system library it links. Prints the ones that are in
-# neither (must be none); a missing one fails the load, or crashes later when the code reaches it
-# (Devid E1 spike).
+# crash_report <command...>: a check died by a signal. Where (gdb: the loaded libraries, the
+# instruction, the backtrace) and on which CPU, for the log; envv is the check's environment.
+crash_report() {
+  command -v gdb >/dev/null || return 0
+  [ ! -r /proc/cpuinfo ] || grep -m1 'model name' /proc/cpuinfo >&2 || true
+  env ${envv[@]+"${envv[@]}"} gdb -q -batch -ex run -ex 'info sharedlibrary' -ex 'x/2i $pc' -ex bt \
+    --args "$@" 2>&1 | tail -50 >&2 || true
+}
+
+# macOS: the .so is a flat-namespace bundle, so every undefined symbol is looked up lazily in PHP's
+# binary or a system library it links. Prints the ones that are in neither (must be none); a
+# missing one fails the load, or crashes later when the code reaches it (Devid E1 spike). Linux
+# needs no such list: its load checks bind every symbol up front (LD_BIND_NOW, in build_one).
 missing_symbols() {
-  [ "$OS" = darwin ] || { missing_symbols_elf "$@"; return; }
   comm -23 <(nm -u "$1" | sort -u) <(nm -gU "$2" | awk '{print $3}' | sort -u) |
     /usr/bin/python3 -I -c 'import ctypes, sys
 libs = [ctypes.CDLL(p) for p in sys.argv[1:]]
 # dyld_stub_binder (no leading underscore) is the lazy-binding helper of dyld itself.
 print("\n".join(s for s in sys.stdin.read().split() if s.startswith("_") and not any(hasattr(l, s[1:]) for l in libs)))' \
       $(otool -L "$1" | awk 'NR>1{print $1}')
-}
-
-# Linux: the .so's undefined (not weak) dynamic symbols, without their version, minus those PHP's
-# binary exports, minus those its NEEDED libraries (glibc only, see check-linux.sh) have.
-missing_symbols_elf() {
-  comm -23 <(nm -D --undefined-only "$1" | awk '$1 == "U" {sub(/@.*/, "", $2); print $2}' | sort -u) \
-      <(nm -D --defined-only "$2" | awk '{sub(/@.*/, "", $3); print $3}' | sort -u) |
-    /usr/bin/python3 -I -c 'import ctypes, sys
-libs = [ctypes.CDLL(p) for p in sys.argv[1:]]
-print("\n".join(s for s in sys.stdin.read().split() if not any(hasattr(l, s) for l in libs)))' \
-      $(readelf -d "$1" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')
 }
 
 build_one() {
@@ -166,10 +163,12 @@ build_one() {
     fail_unless "is not linked with -z nodelete (MAKE_ARGS)" grep -q NODELETE <<<"$dyn"
     fail_unless "is not linked with -Bsymbolic (MAKE_ARGS)" grep -q SYMBOLIC <<<"$dyn"
   fi
-  for b in "$PHP" "$FPM"; do
-    missing="$(missing_symbols "$SO" "$b")"
-    fail_unless "symbols neither $(basename "$b") nor a system library provides: $(head -5 <<<"$missing" | tr '\n' ' ')" test -z "$missing"
-  done
+  if [ "$OS" = darwin ]; then
+    for b in "$PHP" "$FPM"; do
+      missing="$(missing_symbols "$SO" "$b")"
+      fail_unless "symbols neither $(basename "$b") nor a system library provides: $(head -5 <<<"$missing" | tr '\n' ' ')" test -z "$missing"
+    done
+  fi
 
   # LICENSES/<name>-<path with / as ->, so a bundled library's LICENSE never overwrites the extension's.
   for f in "${LICENSE_FILES[@]}"; do
@@ -183,15 +182,15 @@ build_one() {
   local load=(-n -d "$TYPE=$SO") envv=()
   while IFS='=' read -r k v; do [ -n "$k" ] && envv+=("$k=$STAGE/$v"); done < <(
     /usr/bin/python3 -I -c 'import json, sys; [print(f"{k}={v}") for k, v in json.loads(sys.argv[1]).items()]' "$ENV_JSON")
+  # Linux: bind every symbol when the .so loads (PHP loads lazily), so a symbol that is missing, or
+  # that exists only in another version, fails the load checks instead of a later call.
+  [ "$OS" = darwin ] || envv+=(LD_BIND_NOW=1)
   local rc
   for cmd in "$PHP" "$FPM" "$PHP -d zend_extension=$XDEBUG"; do
     # shellcheck disable=SC2086 # $cmd is a binary plus optional -d flags
     m="$(env ${envv[@]+"${envv[@]}"} $cmd "${load[@]}" -m 2>&1)" && rc=0 || rc=$?
-    if [ "$rc" -ge 128 ] && command -v gdb >/dev/null; then
-      # A crash (a signal): where, for the log.
-      # shellcheck disable=SC2086
-      env ${envv[@]+"${envv[@]}"} gdb -q -batch -ex run -ex bt --args $cmd "${load[@]}" -m 2>&1 | tail -25 >&2 || true
-    fi
+    # shellcheck disable=SC2086
+    [ "$rc" -lt 128 ] || crash_report $cmd "${load[@]}" -m
     fail_unless "crashes in '$cmd' (exit $rc)" test "$rc" -lt 128
     fail_unless "does not load in '$cmd': $(grep -iE 'warning|error' <<<"$m" | head -3)" grep -qx "$NAME" <<<"$m"
     fail_unless "warnings while loading in '$cmd': $(grep -iE 'warning|error' <<<"$m" | head -3)" \
@@ -199,7 +198,16 @@ build_one() {
   done
   if [ -n "$SMOKE" ]; then
     local smoke='function check($ok, $what) { if (!$ok) { fwrite(STDERR, "smoke test failed: $what\n"); exit(1); } }'
-    fail_unless "smoke test" env ${envv[@]+"${envv[@]}"} "$PHP" "${load[@]}" ${INI[@]+"${INI[@]}"} -r "$smoke $SMOKE"
+    local smoke_cmd=("$PHP" "${load[@]}" ${INI[@]+"${INI[@]}"} -r "$smoke $SMOKE")
+    env ${envv[@]+"${envv[@]}"} "${smoke_cmd[@]}" && rc=0 || rc=$?
+    [ "$rc" -lt 128 ] || crash_report "${smoke_cmd[@]}"
+    fail_unless "smoke test (exit $rc)" test "$rc" = 0
+    if [ "$OS" = linux ]; then
+      # Again on the oldest CPU these builds promise (QEMU's Nehalem, as in build-php.sh): a library
+      # that uses newer instructions without checking the CPU dies there with SIGILL.
+      env ${envv[@]+"${envv[@]}"} timeout 900 qemu-x86_64 -cpu Nehalem "${smoke_cmd[@]}" && rc=0 || rc=$?
+      fail_unless "smoke test on a Nehalem CPU (QEMU, exit $rc)" test "$rc" = 0
+    fi
   fi
 
   /usr/bin/python3 -I -c 'import json, sys
