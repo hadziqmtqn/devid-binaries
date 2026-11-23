@@ -84,8 +84,9 @@ jobs:
             work/pkgroot
           key: db-postgresql-${{ matrix.key }}-${{ hashFiles('db/versions.json', 'scripts/build-postgres.sh', 'scripts/fetch-spc.sh') }}
           restore-keys: db-postgresql-${{ matrix.key }}-
-      - if: matrix.os == 'linux' && matrix.engine == 'postgresql'
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user patchelf
+      # Linux: QEMU for PostgreSQL's older-CPU check, gdb for the backtrace of a crash in db-smoke.sh.
+      - if: matrix.os == 'linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user gdb
       - name: Build and smoke-test
         env:
           GITHUB_TOKEN: ${{ github.token }}   # GitHub's API: mongosh's digest, spc's library sources
