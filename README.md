@@ -95,6 +95,25 @@ Each extension is a recipe in `extensions/<name>.sh`: the upstream release with 
 
 **The weekly upstream check** also runs `scripts/upstream.py --catalog`. Its job summary lists newer stable PECL releases of the recipes, a newer ImageMagick (whose SVG patch must then be checked), and the most downloaded PIE extensions for macOS and NTS PHP that are not in the catalog. It changes nothing by itself.
 
+## Database servers
+
+MySQL, PostgreSQL and MongoDB for every platform Devid supports (Devid D-058). **No Devid release installs or runs them yet**: they are a separate release track, and nothing in the runtime releases or `runtime-latest` changes.
+
+| Asset | Series | Contents |
+|---|---|---|
+| `mysql-<version>-<os>-<arch>.tar.gz` | 8.4 LTS, 9.7 LTS | the **official** MySQL Community Server build, checked against the SHA-256 pinned in `db/versions.json`: `bin/` (mysqld and the clients), `lib/`, `share/`, `docs/`, licenses and `BUILDINFO`. Left out: mysqld-debug, the debug plugins, the MeCab dictionary, static libraries, headers and man pages. The files kept are not modified. |
+| `postgresql-<version>-<os>-<arch>.tar.gz` | 15 to 19 | built from source here: `bin/`, `lib/` (libpq and the contrib modules), `share/`, `include/`, licenses and `BUILDINFO`. Relocatable. OpenSSL 3.5 is linked statically; no ICU, uuid-ossp or LLVM JIT. |
+| `mongodb-<version>-<os>-<arch>.tar.gz` | 7.0, 8.0, 9.0 | the **official** MongoDB Community Server `mongod`, unmodified and checked against MongoDB's `full.json`, plus its licenses (SSPL) and `BUILDINFO` |
+| `mongosh-<version>-<os>-<arch>.tar.gz` | | the **official** mongosh build, unmodified and checked against GitHub's SHA-256 digest of the asset |
+
+- **Releases:** `db-YYYY.MM.DD-N` holds the archives, `manifest.json` and `checksums.txt`; `db-latest` always has the newest one's `manifest.json`. Its `mysql`, `postgresql` and `mongodb` entries are keyed by series (`"9.7"`, `"17"`, `"9.0"`), each with a `version` and an `arch` map that uses the same keys as the runtime manifest (`x86_64`, `arm64`, `linux-x86_64`).
+- **Platforms:**
+  - MySQL's macOS builds need macOS 14 or later, and so do MongoDB 8.0 and 9.0. PostgreSQL targets macOS 12.
+  - Oracle stopped building MySQL for Intel Macs after 8.4.11 and 9.7.4, so MySQL is pinned per platform in `db/versions.json`: Intel Macs keep their last build while the others move on. Each `arch` entry in the manifest has its own `version`.
+  - On Linux, MySQL is Oracle's build for glibc 2.28, with libaio and libnuma built from source (zig, for glibc 2.17) into `lib/private` (Ubuntu 24.04 has libaio only as `libaio.so.1t64`). PostgreSQL is built with static-php-cli's zig toolchain for glibc 2.17. MongoDB is its Ubuntu 22.04 build, which needs OpenSSL 3 and libcurl 4 (Ubuntu 22.04 and later, Debian 12) and a CPU with AVX.
+- **Checks:** every archive is unpacked under a new path on its own platform's GitHub runner. A server is created, started on `127.0.0.1` and a spare port, queried with the bundled client (mongosh for MongoDB) and stopped (`scripts/db-smoke.sh`). The PostgreSQL build also fails if a file links a library from outside the archive and the system or keeps a link into the build machine, or, on Linux, if it needs a glibc newer than 2.17 or does not start on QEMU's Nehalem CPU.
+- **Updates:** a version change is a pull request to `db/versions.json`. `.github/workflows/db-release.yml` builds and smoke-tests everything on the pull request, publishing nothing, and publishes a release once it is merged. Every Monday, `scripts/db.py check` reports newer upstream releases and series in the job summary, and changes nothing. For MySQL, compare the MD5 of each new archive with Oracle's download page before pinning its SHA-256.
+
 ## How they are built
 
 - `scripts/build-php.sh` uses [static-php-cli](https://github.com/crazywhalecc/static-php-cli) (version pinned, archive SHA-256-checked before it runs).
@@ -103,6 +122,7 @@ Each extension is a recipe in `extensions/<name>.sh`: the upstream release with 
 - `scripts/mirror-caddy.sh` downloads the official Caddy release and verifies its SHA-512 (no rebuild).
 - `scripts/mirror-mailpit.sh` downloads the official Mailpit release and verifies it against GitHub's SHA-256 digest of the asset (no rebuild).
 - `scripts/manifest.py` writes `manifest.json` and `checksums.txt`.
+- `scripts/mirror-mysql.sh`, `scripts/mirror-mongodb.sh`, `scripts/mirror-mongosh.sh` and `scripts/build-postgres.sh` make the database archives, and `scripts/db.py` their manifest (see [Database servers](#database-servers)).
 - `.github/workflows/release.yml` builds on GitHub's `macos-15-intel` (x86_64), `macos-15` (arm64) and `ubuntu-24.04` (Linux x86_64) runners and publishes the release.
 
 Every build fails if a binary links anything from `/usr/local` or `/opt/homebrew` (Homebrew), if Xdebug does not load, or if a required extension is missing. Every extension build also fails if:
@@ -123,3 +143,4 @@ The [MIT license](LICENSE) covers only the build scripts, workflows and docs in 
 
 - **Devid:** `devid` and the desktop app are under the [GNU AGPL v3](https://github.com/hadziqmtqn/devid/blob/main/LICENSE). The source of each `devid-v<version>` release is the `v<version>` tag in [`hadziqmtqn/devid`](https://github.com/hadziqmtqn/devid).
 - **Everything else:** each archive carries the licenses of everything compiled into it in `LICENSES/`. This includes PHP (PHP License 3.01), OpenSSL (Apache-2.0), ICU, libxml2, libpq, nginx (BSD-2-Clause), PCRE2 (BSD-3-Clause), Mailpit (MIT) and the other bundled libraries.
+- **Databases:** MySQL Community Server is under the GPL v2 (with Oracle's FOSS exception), PostgreSQL under the PostgreSQL License, MongoDB Community Server under the SSPL v1 and mongosh under Apache-2.0. libaio and libnuma, bundled with MySQL on Linux, are under the LGPL v2.1. Each archive's `LICENSES/` has the texts.

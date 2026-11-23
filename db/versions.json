@@ -1,0 +1,62 @@
+{
+  "mysql": {
+    "8.4": {
+      "darwin-x86_64": {
+        "version": "8.4.11",
+        "sha256": "90e8aea10698d01b978f0179e72e8d5e2cbe9f9bd5771e88b0b75d7c82244d3f"
+      },
+      "darwin-arm64": {
+        "version": "8.4.13",
+        "sha256": "f324f8950e24d4147470bbc6a6ef0b90ef93b91d3fc74154b3d2ba085b44912a"
+      },
+      "linux-x86_64": {
+        "version": "8.4.13",
+        "sha256": "5dfbb764f731df40ef9e4f5d69aed32bdac8ba1af20bd96b7d40a942d83d4ed2"
+      }
+    },
+    "9.7": {
+      "darwin-x86_64": {
+        "version": "9.7.4",
+        "sha256": "4d5e110fe4e8fc87d6a4c30355096914be2606687cb5818a353190764302c26a"
+      },
+      "darwin-arm64": {
+        "version": "9.7.4",
+        "sha256": "abf378ff27753325c908d687a3060f025c58b6530eda53ff4a0c6fc5ff3d7716"
+      },
+      "linux-x86_64": {
+        "version": "9.7.4",
+        "sha256": "1b022d85e2901e85d6f4df5482a03b036b5b2cf55ad786c9a788f805c6687665"
+      }
+    }
+  },
+  "postgresql": {
+    "15": "15.20",
+    "16": "16.16",
+    "17": "17.12",
+    "18": "18.7",
+    "19": "19.0"
+  },
+  "mongodb": {
+    "7.0": "7.0.48",
+    "8.0": "8.0.38",
+    "9.0": "9.0.8"
+  },
+  "mongosh": "2.14.3",
+  "sources": {
+    "openssl": {
+      "version": "3.5.9",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz",
+      "sha256": "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a"
+    },
+    "libaio": {
+      "version": "0.3.113",
+      "url": "https://ftp.debian.org/debian/pool/main/liba/libaio/libaio_0.3.113.orig.tar.gz",
+      "sha256": "2c44d1c5fd0d43752287c9ae1eb9c023f04ef848ea8d4aafa46e9aedb678200b"
+    },
+    "numactl": {
+      "version": "2.0.19",
+      "url": "https://github.com/numactl/numactl/releases/download/v2.0.19/numactl-2.0.19.tar.gz",
+      "sha256": "f2672a0381cb59196e9c246bf8bcc43d5568bc457700a697f1a1df762b9af884"
+    }
+  }
+}
