@@ -25,7 +25,7 @@ if [ "$OS" = darwin ]; then
   export SDKROOT="$(xcrun --show-sdk-path)"
   export MACOSX_DEPLOYMENT_TARGET=12.0
   JOBS="$(sysctl -n hw.ncpu)"
-  BUILD_ENV=()
+  BUILD_ENV=() MAKE_ARGS=()
 else
   # The same target as build-php.sh (Devid Phase 12 L1): spc builds the recipes' libraries with it,
   # and each extension's configure gets the same zig (BUILD_ENV; spc keeps its own compiler
@@ -36,6 +36,14 @@ else
   [ -n "$ZIG" ] || { echo "FAIL: no zig in $WORK/pkgroot; run build-php.sh first" >&2; exit 1; }
   BUILD_ENV=("CC=$ZIG cc -target $SPC_TARGET" "CXX=$ZIG c++ -target $SPC_TARGET"
     "CFLAGS=-O2 -Wno-date-time" "CXXFLAGS=-O2 -Wno-date-time")
+  # Link flags for every extension (the module link rule reads EXTRA_LDFLAGS; a recipe's LDFLAGS
+  # cannot drop them):
+  # - nodelete: PHP dlcloses extensions at shutdown, then exit() runs the atexit handlers and C++
+  #   destructors that libraries in the .so registered (OpenSSL, libjxl). zig's shared objects do
+  #   not run them at dlclose, so they jumped into unmapped code (imagick and mongodb crashed).
+  # - Bsymbolic: the .so's own copies of OpenSSL, libc++ and the like bind to themselves, never to
+  #   the same names that the php binary or another extension exports (macOS's two-level namespace).
+  MAKE_ARGS=("EXTRA_LDFLAGS=-Wl,-z,nodelete -Wl,-Bsymbolic")
   JOBS="$(nproc)"
 fi
 
@@ -128,7 +136,7 @@ build_one() {
   prepare
   (cd "$SRC" && run "$NAME-phpize" phpize &&
     run "$NAME-configure" env ${BUILD_ENV[@]+"${BUILD_ENV[@]}"} ./configure --with-php-config="$BR/bin/php-config" ${ARGS[@]+"${ARGS[@]}"} &&
-    run "$NAME-make" make -j"$JOBS")
+    run "$NAME-make" make -j"$JOBS" ${MAKE_ARGS[@]+"${MAKE_ARGS[@]}"})
 
   PKG="ext-$NAME-$VERSION-php$PHP_VER-$OS-$ARCH"
   STAGE="$WORK/stage/$PKG"
@@ -153,6 +161,10 @@ build_one() {
     links="$(readelf -d "$SO" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')"
     # glibc only, nothing newer than GLIBC_MIN, no rpath.
     fail_unless "fails the Linux checks" "$ROOT/scripts/check-linux.sh" "$GLIBC_MIN" "$SO"
+    local dyn
+    dyn="$(readelf -d "$SO")"
+    fail_unless "is not linked with -z nodelete (MAKE_ARGS)" grep -q NODELETE <<<"$dyn"
+    fail_unless "is not linked with -Bsymbolic (MAKE_ARGS)" grep -q SYMBOLIC <<<"$dyn"
   fi
   for b in "$PHP" "$FPM"; do
     missing="$(missing_symbols "$SO" "$b")"
@@ -215,9 +227,11 @@ NAMES=("$@")
 failed=""
 for n in "${NAMES[@]}"; do
   # A subshell per recipe, so one recipe's fields never leak into the next. Not in an || list, which
-  # would turn off set -e inside it; a failing recipe is noted and the rest still build.
+  # would turn off set -e inside it; a failing recipe is noted and the rest still build. The subshell
+  # inherits set +e, so it turns set -e back on: without that, a failed check only printed FAIL and
+  # the recipe was still packaged.
   set +e
-  ( build_one "$n" )
+  ( set -e; build_one "$n" )
   rc=$?
   set -e
   [ "$rc" = 0 ] || failed="$failed $n"

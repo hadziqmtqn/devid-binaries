@@ -63,7 +63,9 @@ prepare() {
 stage_extra() {
   mkdir -p "$STAGE/etc"
   cp "$BR/etc/ImageMagick-7/policy.xml" "$STAGE/etc/"   # ImageMagick's default ("open") policy
-  cp "$RECIPES/imagick/type.xml" "$STAGE/etc/"
+  # The fonts each OS ships (type-linux.xml becomes type.xml in the archive).
+  if [ "$OS" = darwin ]; then cp "$RECIPES/imagick/type.xml" "$STAGE/etc/"
+  else cp "$RECIPES/imagick/type-linux.xml" "$STAGE/etc/type.xml"; fi
   cp "$BR/share/doc/ImageMagick-7/LICENSE" "$STAGE/LICENSES/ImageMagick-LICENSE"
 }
 

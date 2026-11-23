@@ -8,6 +8,8 @@ LICENSE_FILES=(LICENSE THIRD_PARTY_NOTICES)
 SPC_LICENSES=openssl
 ARGS=(--with-mongodb-ssl=openssl --with-mongodb-system-libs=no --with-mongodb-zlib=bundled
   --with-mongodb-sasl=no --with-mongodb-snappy=no --with-mongodb-zstd=no)
+# Linux: libmongoc's DNS (SRV) lookups use libresolv, which glibc 2.17 keeps out of libc.
+[ "$OS" = darwin ] || ARGS+=("LIBS=-lresolv")
 SMOKE='$d = MongoDB\BSON\Document::fromPHP(["a" => 1]);
 check($d->toPHP()->a === 1, "BSON round trip");
 new MongoDB\Driver\Manager("mongodb://127.0.0.1:1");
