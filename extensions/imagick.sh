@@ -19,9 +19,33 @@ IM_SHA256=40b6fefa88fe16ca5a4b3d3db5133eaebfb0157f21f98530bde8aec5dd5b0776
 IM_PATCH="$RECIPES/imagick/imagemagick-svg-url-fill.patch"
 
 build_imagemagick() {
-  # The build root is cached between CI runs; rebuild only when the version or the patch changes.
+  # spc's ImageMagick options, plus libxml2 for SVG (D-024). Delegates that are not built here are
+  # off explicitly, so a library on the build machine can never slip in. Linux: the zig of
+  # build-ext.sh (BUILD_ENV), for the same glibc as PHP.
+  local cc args
+  if [ "$OS" = darwin ]; then
+    cc=(CC=clang CXX=clang++ "CFLAGS=-I$BR/include --target=$ARCH-apple-darwin -Os"
+      "CXXFLAGS=-I$BR/include --target=$ARCH-apple-darwin -Os")
+  else
+    cc=("CC=$ZIG cc -target $SPC_TARGET" "CXX=$ZIG c++ -target $SPC_TARGET"
+      "CFLAGS=-I$BR/include -Os -Wno-date-time" "CXXFLAGS=-I$BR/include -Os -Wno-date-time")
+  fi
+  # --without-gcc-arch: configure would add -mtune=<the build machine's CPU>, which zig takes as the
+  # target CPU. A build on an AMD runner then used AMD-only instructions (SSE4a) and died with
+  # SIGILL on an Intel one.
+  args=(--enable-static --disable-shared --prefix="$BR" --without-gcc-arch \
+    --with-pic --enable-pic --disable-openmp --without-x --without-magick-plus-plus --without-perl \
+    --with-bzlib --with-freetype --with-heic --with-jpeg --with-jxl --with-png --with-tiff --with-webp --with-xml --with-zlib \
+    --without-djvu --without-dmr --without-fontconfig --without-gvc --without-jbig --without-lcms --without-lqr \
+    --without-lzma --without-openexr --without-openjp2 --without-pango --without-raqm --without-raw \
+    --without-zip --without-zstd \
+    "${cc[@]}" "LDFLAGS=-L$BR/lib" "LIBS=-liconv -lresolv" \
+    "PKG_CONFIG=$(command -v pkg-config) --static")
+
+  # The build root is cached between CI runs; rebuild only when the version, the patch or the
+  # configure options change.
   local stamp="$BR/lib/devid-imagemagick.stamp" want src
-  want="$IM_VERSION $(shasum -a 256 "$IM_PATCH" | cut -c1-64)"
+  want="$IM_VERSION $(shasum -a 256 "$IM_PATCH" | cut -c1-64) $(printf '%s\n' "${args[@]}" | shasum -a 256 | cut -c1-64)"
   [ "$(cat "$stamp" 2>/dev/null)" != "$want" ] || return 0
   fetch "$IM_URL" "$IM_SHA256" "$WORK/ext/downloads/ImageMagick-$IM_VERSION.tar.gz"
   src="$WORK/ext/src/ImageMagick"
@@ -30,25 +54,7 @@ build_imagemagick() {
     echo "FAIL: the SVG patch no longer applies to ImageMagick $IM_VERSION; drop it if ImageMagick/ImageMagick#9093 is fixed" >&2
     return 1
   }
-  # spc's ImageMagick options, plus libxml2 for SVG (D-024). Delegates that are not built here are
-  # off explicitly, so a library on the build machine can never slip in. Linux: the zig of
-  # build-ext.sh (BUILD_ENV), for the same glibc as PHP.
-  local cc
-  if [ "$OS" = darwin ]; then
-    cc=(CC=clang CXX=clang++ "CFLAGS=-I$BR/include --target=$ARCH-apple-darwin -Os"
-      "CXXFLAGS=-I$BR/include --target=$ARCH-apple-darwin -Os")
-  else
-    cc=("CC=$ZIG cc -target $SPC_TARGET" "CXX=$ZIG c++ -target $SPC_TARGET"
-      "CFLAGS=-I$BR/include -Os -Wno-date-time" "CXXFLAGS=-I$BR/include -Os -Wno-date-time")
-  fi
-  (cd "$src" && run imagemagick-configure ./configure --enable-static --disable-shared --prefix="$BR" \
-    --with-pic --enable-pic --disable-openmp --without-x --without-magick-plus-plus --without-perl \
-    --with-bzlib --with-freetype --with-heic --with-jpeg --with-jxl --with-png --with-tiff --with-webp --with-xml --with-zlib \
-    --without-djvu --without-dmr --without-fontconfig --without-gvc --without-jbig --without-lcms --without-lqr \
-    --without-lzma --without-openexr --without-openjp2 --without-pango --without-raqm --without-raw \
-    --without-zip --without-zstd \
-    "${cc[@]}" "LDFLAGS=-L$BR/lib" "LIBS=-liconv -lresolv" \
-    "PKG_CONFIG=$(command -v pkg-config) --static" &&
+  (cd "$src" && run imagemagick-configure ./configure "${args[@]}" &&
     run imagemagick-make make -j"$JOBS" &&
     run imagemagick-install make install)
   echo "$want" > "$stamp"
