@@ -155,6 +155,10 @@ build_one() {
     fail_unless "links a library outside /usr/lib and /System: $links" \
       test -z "$(grep -vE '^(/usr/lib/|/System/)' <<<"$links" || true)"
     fail_unless "still has an LC_RPATH" test -z "$(otool -l "$SO" | grep LC_RPATH || true)"
+    for b in "$PHP" "$FPM"; do
+      missing="$(missing_symbols "$SO" "$b")"
+      fail_unless "symbols neither $(basename "$b") nor a system library provides: $(head -5 <<<"$missing" | tr '\n' ' ')" test -z "$missing"
+    done
   else
     # Build paths must not ship (a runpath into the build root), then strip.
     patchelf --remove-rpath "$SO"
@@ -166,12 +170,6 @@ build_one() {
     dyn="$(readelf -d "$SO")"
     fail_unless "is not linked with -z nodelete (MAKE_ARGS)" grep -q NODELETE <<<"$dyn"
     fail_unless "is not linked with -Bsymbolic (MAKE_ARGS)" grep -q SYMBOLIC <<<"$dyn"
-  fi
-  if [ "$OS" = darwin ]; then
-    for b in "$PHP" "$FPM"; do
-      missing="$(missing_symbols "$SO" "$b")"
-      fail_unless "symbols neither $(basename "$b") nor a system library provides: $(head -5 <<<"$missing" | tr '\n' ' ')" test -z "$missing"
-    done
   fi
 
   # LICENSES/<name>-<path with / as ->, so a bundled library's LICENSE never overwrites the extension's.
@@ -240,8 +238,7 @@ failed=""
 for n in "${NAMES[@]}"; do
   # A subshell per recipe, so one recipe's fields never leak into the next. Not in an || list, which
   # would turn off set -e inside it; a failing recipe is noted and the rest still build. The subshell
-  # inherits set +e, so it turns set -e back on: without that, a failed check only printed FAIL and
-  # the recipe was still packaged.
+  # inherits set +e, so it turns set -e back on.
   set +e
   ( set -e; build_one "$n" )
   rc=$?
