@@ -129,10 +129,13 @@ jobs:
       - name: Packages
         run: |
           if command -v pacman > /dev/null; then
-            pacman -Syu --noconfirm --needed curl
+            # Today's Arch: the keyring first, so the upgrade can verify newer packages.
+            pacman -Sy --noconfirm --needed archlinux-keyring
+            pacman -Su --noconfirm
             # The bundled OpenSSL 3 is what mongod must use: no openssl-3 package here.
             if pacman -Q openssl-3; then echo "openssl-3 is installed" >&2; exit 1; fi
           else
+            export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq && apt-get install -y -qq libcurl4 > /dev/null
           fi
       - uses: actions/checkout@v7

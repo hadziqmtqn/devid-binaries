@@ -11,6 +11,8 @@
 # Each library may need only glibc 2.17 or older, besides the others in <dest dir>. Its license goes
 # to $LICENSES_DIR, and "<name> <version> <source URL>" to stdout.
 set -euo pipefail
+# Say where a command failed: callers keep only this script's last line of output.
+trap 'echo "FAIL: db-linux-libs.sh ${NAME:-}: line $LINENO: $BASH_COMMAND" >&2' ERR
 NAME="${1:?usage: db-linux-libs.sh <libaio|libnuma|ncurses|openssl> <dest dir>}"
 DEST="$(mkdir -p "${2:?dest dir}" && cd "$2" && pwd)"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -32,10 +34,12 @@ fi
 
 # zig from static-php-cli, as build-php.sh and build-postgres.sh use it.
 "$ROOT/scripts/fetch-spc.sh" "$ROOT/work"
-zig="$(find "$ROOT/work/pkgroot" -type f -name zig -perm -u+x 2>/dev/null | head -1)"
+# Capture first: on a fresh runner pkgroot does not exist yet, and under pipefail a failing find
+# would end the script here.
+zig="$(find "$ROOT/work/pkgroot" -type f -name zig -perm -u+x 2>/dev/null | head -1 || true)"
 if [ -z "$zig" ]; then
   (cd "$ROOT/work" && SPC_TARGET="x86_64-linux-gnu.$GLIBC_MIN" ./spc doctor --auto-fix)
-  zig="$(find "$ROOT/work/pkgroot" -type f -name zig -perm -u+x | head -1)"
+  zig="$(find "$ROOT/work/pkgroot" -type f -name zig -perm -u+x | head -1 || true)"
 fi
 [ -n "$zig" ] || { echo "FAIL: no zig under $ROOT/work/pkgroot" >&2; exit 1; }
 CC="$BUILD/zigcc"
@@ -106,7 +110,8 @@ for f in "${FILES[@]}"; do
   needed="$(objdump -p "$f" | awk '/NEEDED/ {print $2}')"
   other="$(grep -vxE "lib(c|m|dl|pthread|rt|util|resolv)\.so\.[0-9]+|ld-linux-x86-64\.so\.2|$bundled" <<<"$needed" || true)"
   [ -z "$other" ] || { echo "FAIL: $f links libraries outside glibc: $(tr '\n' ' ' <<<"$other")" >&2; fail=1; }
-  if objdump -p "$f" | grep -qE 'RPATH|RUNPATH'; then echo "FAIL: $f has a runpath" >&2; fail=1; fi
+  dyn="$(objdump -p "$f")"   # capture first: `cmd | grep -q` under pipefail fails on SIGPIPE
+  if grep -qE 'RPATH|RUNPATH' <<<"$dyn"; then echo "FAIL: $f has a runpath" >&2; fail=1; fi
   newest="$(objdump -T "$f" | grep -oE 'GLIBC_[0-9]+\.[0-9]+(\.[0-9]+)?' | sed 's/GLIBC_//' | sort -uV | tail -1 || true)"
   if [ -n "$newest" ] && [ "$(printf '%s\n%s\n' "$newest" "$GLIBC_MIN" | sort -V | tail -1)" != "$GLIBC_MIN" ]; then
     echo "FAIL: $f needs glibc $newest, newer than $GLIBC_MIN" >&2; fail=1
