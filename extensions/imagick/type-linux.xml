@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Fonts for ImageMagick on Linux (Devid D-024, D-057), the counterpart of type.xml for macOS.
-  ImageMagick is built without fontconfig, so it knows only the files listed here. Paths are those of
-  Debian and Ubuntu: fonts-dejavu-core (installed with fontconfig) and fonts-liberation (Chrome's
-  .deb depends on it). ImageMagick drops an entry whose file is missing. Text without a font uses the
-  Arial or Helvetica family, so both are mapped: Arial to Liberation Sans, its metric-compatible
-  clone, and Helvetica to DejaVu Sans for systems without Liberation.
+  Fonts for ImageMagick on Linux (Devid D-024, D-057, D-059), the counterpart of type.xml for macOS.
+  ImageMagick is built without fontconfig, so it knows only the files listed here. Each font is listed
+  twice, once per layout, and ImageMagick drops an entry whose file is missing, so one file serves both
+  (Devid Phase 13 A1 drew text with it on Arch and Ubuntu):
+  - Debian and Ubuntu: fonts-dejavu-core (installed with fontconfig) and fonts-liberation (Chrome's
+    .deb depends on it), in /usr/share/fonts/truetype/;
+  - Arch and its derivatives: ttf-dejavu in /usr/share/fonts/TTF/ and ttf-liberation in
+    /usr/share/fonts/liberation/.
+  Text without a font uses the Arial or Helvetica family, so both are mapped: Arial to Liberation
+  Sans, its metric-compatible clone, and Helvetica to DejaVu Sans for systems without Liberation.
 -->
 <typemap>
   <type name="DejaVu-Sans" fullname="DejaVu Sans" family="DejaVu Sans" style="Normal" stretch="Normal" weight="400" glyphs="/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"/>
@@ -17,4 +21,13 @@
   <type name="Arial-Bold" fullname="Arial Bold" family="Arial" style="Normal" stretch="Normal" weight="700" glyphs="/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"/>
   <type name="Times" fullname="Times" family="Times" style="Normal" stretch="Normal" weight="400" glyphs="/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf"/>
   <type name="Courier" fullname="Courier" family="Courier" style="Normal" stretch="Normal" weight="400" glyphs="/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf"/>
+  <type name="DejaVu-Sans" fullname="DejaVu Sans" family="DejaVu Sans" style="Normal" stretch="Normal" weight="400" glyphs="/usr/share/fonts/TTF/DejaVuSans.ttf"/>
+  <type name="DejaVu-Sans-Bold" fullname="DejaVu Sans Bold" family="DejaVu Sans" style="Normal" stretch="Normal" weight="700" glyphs="/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"/>
+  <type name="DejaVu-Serif" fullname="DejaVu Serif" family="DejaVu Serif" style="Normal" stretch="Normal" weight="400" glyphs="/usr/share/fonts/TTF/DejaVuSerif.ttf"/>
+  <type name="DejaVu-Sans-Mono" fullname="DejaVu Sans Mono" family="DejaVu Sans Mono" style="Normal" stretch="Normal" weight="400" glyphs="/usr/share/fonts/TTF/DejaVuSansMono.ttf"/>
+  <type name="Helvetica" fullname="Helvetica" family="Helvetica" style="Normal" stretch="Normal" weight="400" glyphs="/usr/share/fonts/TTF/DejaVuSans.ttf"/>
+  <type name="Arial" fullname="Arial" family="Arial" style="Normal" stretch="Normal" weight="400" glyphs="/usr/share/fonts/liberation/LiberationSans-Regular.ttf"/>
+  <type name="Arial-Bold" fullname="Arial Bold" family="Arial" style="Normal" stretch="Normal" weight="700" glyphs="/usr/share/fonts/liberation/LiberationSans-Bold.ttf"/>
+  <type name="Times" fullname="Times" family="Times" style="Normal" stretch="Normal" weight="400" glyphs="/usr/share/fonts/liberation/LiberationSerif-Regular.ttf"/>
+  <type name="Courier" fullname="Courier" family="Courier" style="Normal" stretch="Normal" weight="400" glyphs="/usr/share/fonts/liberation/LiberationMono-Regular.ttf"/>
 </typemap>

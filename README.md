@@ -59,7 +59,7 @@ curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-
 |---|---|
 | `php-<version>-<os>-<arch>.tar.gz` | `php`, `php-fpm`, `modules/xdebug.so`, `modules/pcov.so`, `LICENSES/`, `BUILDINFO` |
 | `nginx-<version>-<os>-<arch>.tar.gz` | `nginx` (OpenSSL, zlib and PCRE2 linked statically), `LICENSES/`, `BUILDINFO` |
-| `ext-<name>-<version>-php<minor>-<os>-<arch>.tar.gz` | one PHP extension built for that PHP release: `<name>.so`, `ext.json` (type, PHP API, license, source and the environment it needs), `LICENSES/`, `BUILDINFO`; imagick also has `etc/` (`policy.xml`, and `type.xml` with the fonts of macOS or of Debian and Ubuntu) |
+| `ext-<name>-<version>-php<minor>-<os>-<arch>.tar.gz` | one PHP extension built for that PHP release: `<name>.so`, `ext.json` (type, PHP API, license, source and the environment it needs), `LICENSES/`, `BUILDINFO`; imagick also has `etc/` (`policy.xml`, and `type.xml` with the fonts of macOS, or on Linux those of Debian and Ubuntu and of Arch, each font in both layouts) |
 | `caddy-<version>-<os>-<arch>.tar.gz` | the **official** Caddy build, unmodified and checked against Caddy's published SHA-512, plus its license and `BUILDINFO` |
 | `mailpit-<version>-<os>-<arch>.tar.gz` | the **official** Mailpit build (Devid's mail catcher), unmodified and checked against the SHA-256 GitHub records for the release asset, since Mailpit publishes no checksums; plus its license and `BUILDINFO` |
 | `manifest.json` | every asset with its version, URL, SHA-256 and size (read by Devid) |
