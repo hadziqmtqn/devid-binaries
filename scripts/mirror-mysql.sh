@@ -85,8 +85,16 @@ else
   make -C libaio-src/src -s CC="$WORK/zigcc" libaio_sobjs="$objs" > /dev/null
   cp libaio-src/src/libaio.so.1.0.* "$STAGE/lib/private/libaio.so.1"
   cp libaio-src/COPYING "$STAGE/LICENSES/libaio.txt"
-  (cd numactl-src && ./configure --quiet --disable-static CC="$WORK/zigcc" > /dev/null && make -s libnuma.la > /dev/null)
-  cp numactl-src/.libs/libnuma.so.1.0.0 "$STAGE/lib/private/libnuma.so.1"
+  # libnuma without libtool, which does not link with zig, and without its -Wl,-init/-fini, which
+  # zig's linker refuses (numa_init and numa_fini are already a constructor and a destructor).
+  srcs="$(sed -n 's/^libnuma_la_SOURCES = //p' numactl-src/Makefile.am | tr ' ' '\n' | grep '\.c$' || true)"
+  [ -n "$srcs" ] || { echo "FAIL: no libnuma_la_SOURCES in numactl's Makefile.am" >&2; exit 1; }
+  (
+    cd numactl-src && ./configure --quiet CC="$WORK/zigcc" > /dev/null
+    for f in $srcs; do "$WORK/zigcc" -O2 -fPIC -Wall -DHAVE_CONFIG_H -I. -c "$f" -o "${f%.c}.pic.o"; done
+    "$WORK/zigcc" -shared -Wl,--version-script,versions.ldscript -Wl,-soname,libnuma.so.1 -o libnuma.so.1 ./*.pic.o
+  )
+  cp numactl-src/libnuma.so.1 "$STAGE/lib/private/libnuma.so.1"
   cp numactl-src/LICENSE.LGPL2.1 "$STAGE/LICENSES/libnuma.txt"
   # Both may need only glibc, no newer than MySQL's own floor.
   "$ROOT/scripts/check-linux.sh" 2.28 "$STAGE/lib/private/libaio.so.1" "$STAGE/lib/private/libnuma.so.1"
