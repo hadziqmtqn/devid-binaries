@@ -25,10 +25,27 @@ trace() {
 # The archive is unpacked under a path that is not where it was built, so a hard-coded path shows.
 mkdir -p "$T/moved/here" && tar -xzf "$ARCHIVE" -C "$T/moved/here"
 D="$T/moved/here"
+# On Linux, the bundled libraries must be the ones loaded: ldd_from <dir> <binary> <soname...>
+# (with LIBS set, as LD_LIBRARY_PATH).
+ldd_from() {
+  [ "$(uname -s)" = Linux ] || return 0
+  local dir bin="$2" lib map path
+  dir="$(readlink -f "$1")"
+  shift 2
+  map="$(env ${LIBS:+LD_LIBRARY_PATH="$LIBS"} ldd "$bin")" || fail "ldd $bin"
+  ! grep -q 'not found' <<<"$map" || fail "$(basename "$bin") lacks libraries: $(grep 'not found' <<<"$map" | tr -s ' \t' ' ')"
+  for lib in "$@"; do
+    path="$(awk -v l="$lib" '$1 == l {print $3}' <<<"$map")"
+    [ -n "$path" ] && [ "$(readlink -f "$path")" = "$dir/$lib" ] ||
+      fail "$(basename "$bin") loads $lib from ${path:-nowhere}, not $dir"
+  done
+}
 wait_for() { for _ in $(seq 60); do eval "$1" && return 0; kill -0 "$PID" 2>/dev/null || return 1; sleep 1; done; return 1; }
 
 case "$ENGINE" in
   mysql)
+    ldd_from "$D/lib/private" "$D/bin/mysqld" libaio.so.1 libnuma.so.1
+    ldd_from "$D/lib/private" "$D/bin/mysql" libncurses.so.6 libtinfo.so.6
     "$D/bin/mysqld" --no-defaults --initialize-insecure --basedir="$D" --datadir="$T/data" > "$T/log" 2>&1 || {
       trace "$D/bin/mysqld" --no-defaults --initialize-insecure --basedir="$D" --datadir="$T/data-trace"
       fail "mysqld --initialize-insecure"
@@ -62,10 +79,13 @@ case "$ENGINE" in
     ;;
   mongodb)
     mkdir "$T/data"
-    "$D/bin/mongod" --dbpath "$T/data" --port "$PORT" --bind_ip 127.0.0.1 --unixSocketPrefix "$T" --logpath "$T/log" &
+    # On Linux, mongod runs with its bundled OpenSSL 3 (lib/), as Devid will run it.
+    LIBS=""; [ -d "$D/lib" ] && LIBS="$D/lib"
+    ldd_from "$D/lib" "$D/bin/mongod" libssl.so.3 libcrypto.so.3
+    env ${LIBS:+LD_LIBRARY_PATH="$LIBS"} "$D/bin/mongod" --dbpath "$T/data" --port "$PORT" --bind_ip 127.0.0.1 --unixSocketPrefix "$T" --logpath "$T/log" &
     PID=$!
     wait_for 'grep -q "Waiting for connections" "$T/log" 2>/dev/null' || fail "mongod did not start"
-    out="$("$D/bin/mongod" --version | head -1)"
+    out="$(env ${LIBS:+LD_LIBRARY_PATH="$LIBS"} "$D/bin/mongod" --version | head -1)"
     # With a mongosh archive (MONGOSH=<archive>), a write and a read as well.
     if [ -n "${MONGOSH:-}" ]; then
       mkdir "$T/mongosh" && tar -xzf "$MONGOSH" -C "$T/mongosh"

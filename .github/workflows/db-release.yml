@@ -7,6 +7,7 @@ name: Databases
 #
 # - Pull requests that touch the database scripts build and smoke-test everything, publishing nothing.
 # - A merge that changes db/versions.json publishes a release; so does a manual run.
+# - The Linux archives are also smoke-tested in Arch, Debian 12 and Ubuntu 22.04 containers.
 # - Every Monday, db.py check reports newer upstream versions in the job summary, changing nothing.
 on:
   workflow_dispatch:
@@ -30,6 +31,7 @@ on:
       - scripts/mirror-mongodb.sh
       - scripts/mirror-mongosh.sh
       - scripts/build-postgres.sh
+      - scripts/db-linux-libs.sh
       - .github/workflows/db-release.yml
   schedule:
     - cron: "15 1 * * 1"   # Monday 08:15 Asia/Jakarta, after check-upstream.yml
@@ -109,8 +111,47 @@ jobs:
           path: dist/*.tar.gz
           if-no-files-found: error
 
-  release:
+  # The Linux archives on the distributions Devid targets, not only on the Ubuntu 24.04 runner that
+  # built them: Arch (OpenSSL 4, no narrow libncurses), Debian 12 and Ubuntu 22.04 (the oldest).
+  # Each runs as an ordinary user, since PostgreSQL refuses root. The images are minimal, so
+  # libcurl 4, which every desktop has and mongod needs, is installed where it is missing.
+  distros:
     needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["archlinux:latest", "debian:12", "ubuntu:22.04"]
+    name: linux on ${{ matrix.image }}
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    timeout-minutes: 30
+    steps:
+      - name: Packages
+        run: |
+          if command -v pacman > /dev/null; then
+            pacman -Syu --noconfirm --needed curl
+            # The bundled OpenSSL 3 is what mongod must use: no openssl-3 package here.
+            if pacman -Q openssl-3; then echo "openssl-3 is installed" >&2; exit 1; fi
+          else
+            apt-get update -qq && apt-get install -y -qq libcurl4 > /dev/null
+          fi
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: db-*-linux-x86_64
+          path: dist
+          merge-multiple: true
+      - name: Smoke-test every Linux archive
+        run: |
+          useradd -m smoke
+          chown -R smoke .
+          mongosh="$PWD/$(ls dist/mongosh-*.tar.gz)"
+          for a in dist/mysql-*.tar.gz dist/postgresql-*.tar.gz dist/mongodb-*.tar.gz "$mongosh"; do
+            runuser -u smoke -- env MONGOSH="$mongosh" scripts/db-smoke.sh "$a"
+          done
+
+  release:
+    needs: [build, distros]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:

@@ -3,11 +3,15 @@
 # verify the archive against the SHA-256 in MongoDB's own full.json, then repackage mongod with its
 # licenses, unmodified.
 #   SERIES=9.0 OS=darwin ARCH=arm64 scripts/mirror-mongodb.sh -> dist/mongodb-<ver>-<os>-<arch>.tar.gz
-#   OS is darwin (default) or linux, ARCH x86_64 (default) or arm64 (macOS only).
+#   OS is darwin (default) or linux, ARCH x86_64 (default) or arm64 (macOS only). A Linux archive
+#   is made on Linux, which builds the libraries it bundles.
 #
-# Linux uses the Ubuntu 22.04 build, which also runs on 24.04 and Debian 12; it links the system's
-# OpenSSL 3 and libcurl 4. MongoDB 5.0 and later need AVX on x86_64 (Sandy Bridge or newer), above
-# the Nehalem floor of the rest of Devid's Linux runtime. Left out: mongos (sharding only) and
+# Linux uses the Ubuntu 22.04 build. It links OpenSSL 3, which Arch replaced with OpenSSL 4, so
+# scripts/db-linux-libs.sh builds libssl.so.3 and libcrypto.so.3 into lib/: run mongod with
+# LD_LIBRARY_PATH=<archive>/lib (mongod has no runpath, and stays unmodified). libcurl 4 comes from
+# the system; mongod needs its CURL_OPENSSL_4 symbols, which Ubuntu, Debian and Arch all have.
+# MongoDB 5.0 and later need AVX on x86_64 (Sandy Bridge or newer), above the Nehalem floor of the
+# rest of Devid's Linux runtime. Left out: mongos (sharding only) and
 # install_compass. mongosh is a separate archive (mirror-mongosh.sh).
 set -euo pipefail
 
@@ -49,11 +53,12 @@ if [ "$OS" = darwin ]; then
   min="macos_min $(vtool -show-build "$STAGE/bin/mongod" 2>/dev/null | awk '/minos/ {print $2; exit}')"
 else
   needed="$(objdump -p "$STAGE/bin/mongod" | awk '/NEEDED/ {print $2}' | paste -sd' ' -)"
+  ossl="$(LICENSES_DIR="$STAGE/LICENSES" "$ROOT/scripts/db-linux-libs.sh" openssl "$STAGE/lib" | tail -1)"
   if [ "$(uname -s)" = Linux ]; then
-    missing="$(ldd "$STAGE/bin/mongod" | grep 'not found' || true)"
+    missing="$(LD_LIBRARY_PATH="$STAGE/lib" ldd "$STAGE/bin/mongod" | grep 'not found' || true)"
     [ -z "$missing" ] || { echo "FAIL: unresolved libraries: $missing" >&2; exit 1; }
   fi
-  min="needs $needed; cpu x86-64 with AVX"
+  min="needs $needed; bundles ${ossl% *} in lib/ (run with LD_LIBRARY_PATH=<archive>/lib); cpu x86-64 with AVX"
 fi
 
 {

@@ -12,7 +12,7 @@ and mongosh's from the digest GitHub records for the release asset.
   scripts/db.py version <engine> [<series>] [<os-arch>]
                                                 the pinned version (mongosh has no series; MySQL needs <os-arch>)
   scripts/db.py mysql-sha256 <series> <os-arch> the pinned SHA-256 of one MySQL archive
-  scripts/db.py source <name>                   "<version> <url> <sha256>" of a pinned source (openssl, libaio, numactl)
+  scripts/db.py source <name>                   "<version> <url> <sha256>" of a pinned source (openssl, libaio, numactl, ncurses)
   scripts/db.py mongodb-asset <version> <os> <arch>
                                                 "<url> <sha256>" of the official MongoDB Community archive
   scripts/db.py matrix                          the release workflow's job matrix as JSON (in $GITHUB_OUTPUT too)
