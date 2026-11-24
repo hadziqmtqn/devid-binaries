@@ -75,7 +75,13 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
-      # PostgreSQL: OpenSSL (macOS) or static-php-cli's libraries and zig (Linux), between runs.
+      # PostgreSQL: its static OpenSSL, and on Linux static-php-cli's libraries and zig, between runs.
+      # The key names only what is cached (the OpenSSL pin and the build scripts), not all of
+      # db/versions.json: a MySQL or MongoDB bump makes no new cache. The repository's 10 GB of
+      # caches is mostly PHP's (release.yml), which the least recently used rule would evict first.
+      - if: matrix.engine == 'postgresql'
+        id: openssl
+        run: echo "version=$(python3 scripts/db.py source openssl | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - if: matrix.engine == 'postgresql'
         uses: actions/cache@v6
         with:
@@ -84,7 +90,7 @@ jobs:
             work/downloads
             work/buildroot
             work/pkgroot
-          key: db-postgresql-${{ matrix.key }}-${{ hashFiles('db/versions.json', 'scripts/build-postgres.sh', 'scripts/fetch-spc.sh') }}
+          key: db-postgresql-${{ matrix.key }}-openssl-${{ steps.openssl.outputs.version }}-${{ hashFiles('scripts/build-postgres.sh', 'scripts/fetch-spc.sh') }}
           restore-keys: db-postgresql-${{ matrix.key }}-
       # Linux: QEMU for PostgreSQL's older-CPU check, gdb for the backtrace of a crash in db-smoke.sh.
       - if: matrix.os == 'linux'
