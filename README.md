@@ -1,6 +1,6 @@
 # devid-binaries
 
-Prebuilt binaries for **[Devid](https://devid.bekenweb.com)**, a local development environment for Laravel, PHP and Node.js on Macs (Intel or Apple silicon) and on Linux (Ubuntu, x86_64):
+Prebuilt binaries for **[Devid](https://devid.bekenweb.com)**, a local development environment for Laravel, PHP and Node.js on Macs (Intel or Apple silicon) and on Linux (Ubuntu and Arch, x86_64):
 - `devid` itself (the CLI, TUI and daemon), and the Devid desktop app for macOS;
 - static PHP 8.3 / 8.4 / 8.5 (php + php-fpm, with Xdebug and pcov as loadable `.so` files);
 - a catalog of extra PHP extensions built against them;
@@ -13,12 +13,12 @@ Devid's source is public in [`hadziqmtqn/devid`](https://github.com/hadziqmtqn/d
 > **Notice: open-source personal project, provided as is, without warranty.**
 > - The macOS builds are **ad-hoc signed and not notarized**. They are meant to be downloaded by Devid itself (no Gatekeeper quarantine). If you download one by hand in a browser, macOS will block it until you remove the quarantine attribute.
 > - Tested platforms:
->   - **By hand:** an M1 with macOS 26, Intel with macOS 14, and Ubuntu 24.04 Desktop on x86_64.
->   - **On GitHub's runners:** each build runs its checks natively, and each `devid` release serves a test site with the real PHP and nginx on every target before it is published. On Linux, a release also goes through `devid setup` and `devid uninstall` there.
->   - **Minimums:** macOS 12.0; Ubuntu 24.04 or 26.04 for Devid on Linux.
+>   - **By hand:** an M1 with macOS 26, Intel with macOS 14, and on x86_64 Ubuntu 24.04 Desktop, Arch Linux with KDE Plasma, and CachyOS.
+>   - **On GitHub's runners:** each build runs its checks natively, and each `devid` release serves a test site with the real PHP and nginx on every target before it is published. On Linux, a release also goes through `devid setup` and `devid uninstall`, on Ubuntu and on Arch (in a VM).
+>   - **Minimums:** macOS 12.0; for Devid on Linux, Ubuntu 24.04 or 26.04, or Arch Linux and the distributions built on it (from Devid 0.20.0).
 > - `devid setup` asks for your password once and **changes the system**. `devid uninstall` undoes all of it.
 >   - **On macOS:** it adds `/etc/resolver/test`, trusts Devid's certificate authority in the System keychain, and forwards ports 80 and 443 to 8088 and 8443 with a pf anchor.
->   - **On Linux:** it adds a systemd-resolved drop-in for `.test`, trusts Devid's certificate authority in the system store, and redirects ports 80 and 443 with an nftables table that a small system unit loads at boot. As your user, it also adds the CA to Chrome's and Firefox's certificate databases with `certutil`.
+>   - **On Linux:** it adds a systemd-resolved drop-in for `.test` (turning systemd-resolved on where it is off, as on a plain Arch install), trusts Devid's certificate authority in the system store, and redirects ports 80 and 443 with an nftables table that a small system unit loads at boot. As your user, it also adds the CA to Chrome's and Firefox's certificate databases with `certutil`.
 > - Bug reports and feature requests are welcome in [`devid`'s issues](https://github.com/hadziqmtqn/devid/issues/new/choose), but no support is promised. Use at your own risk.
 
 ## Install Devid
@@ -35,10 +35,17 @@ Without it (the CLI and TUI only):
 curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-latest/install.sh | sh
 ```
 
-On Linux (Ubuntu 24.04 or 26.04, x86_64; from Devid 0.19.0), install curl and certutil first, then run the same command:
+On Linux (x86_64), install curl and certutil first, then run the same command. On Ubuntu 24.04 or 26.04 (from Devid 0.19.0):
 
 ```sh
 sudo apt install curl libnss3-tools
+curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-latest/install.sh | sh
+```
+
+On Arch Linux and the distributions built on it, such as CachyOS (from Devid 0.20.0):
+
+```sh
+sudo pacman -S --needed curl nss nftables
 curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-latest/install.sh | sh
 ```
 
@@ -67,7 +74,7 @@ curl -fsSL https://github.com/hadziqmtqn/devid-binaries/releases/download/devid-
 
 `<os>-<arch>` is one of:
 - `darwin-x86_64` (Intel Macs) or `darwin-arm64` (Apple silicon), each built natively on its own GitHub runner;
-- `linux-x86_64`, built on Ubuntu for Devid on Linux (Devid D-057), which uses them from Devid 0.19.0. PHP and the extensions are built with static-php-cli's zig toolchain for glibc 2.17 and later, so they run on Ubuntu 22.04 and later and Debian 12 and later, and they load `.so` files. nginx is fully static (musl).
+- `linux-x86_64`, built on Ubuntu for Devid on Linux (Devid D-057), which uses them from Devid 0.19.0. PHP and the extensions are built with static-php-cli's zig toolchain for glibc 2.17 and later, so they run on Ubuntu 22.04 and later, Debian 12 and later, and Arch Linux, and they load `.so` files. nginx is fully static (musl).
 
 In `manifest.json`, macOS builds are under the arch keys `x86_64` and `arm64`, and Linux builds under `linux-x86_64`.
 
