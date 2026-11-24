@@ -70,7 +70,9 @@ EOF
   chmod +x "$WORK/postgresql/zigcc"
   CC="$WORK/postgresql/zigcc"
   build_openssl linux-x86_64 /usr/lib/ssl   # Debian's and Ubuntu's OpenSSL directory
-  CPPFLAGS="-I$DEPS/include -I$BR/include" LDFLAGS="-L$DEPS/lib -L$BR/lib"
+  # -s: zig cc emits DWARF by default (postgres was 64 MB); the linker drops it and the static
+  # symbol table, and keeps the dynamic symbols that modules bind to.
+  CPPFLAGS="-I$DEPS/include -I$BR/include" LDFLAGS="-L$DEPS/lib -L$BR/lib -s"
   # Static archives: libedit needs ncurses' terminfo, which static-php-cli may build wide or not.
   ncurses=ncurses; [ -f "$BR/lib/libncursesw.a" ] && ncurses=ncursesw
   EXTRA=(--with-libedit-preferred LIBS="-l$ncurses")
