@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ["8.3", "8.4", "8.5"]
+        php: ["8.3", "8.4", "8.5", "8.6"]
         # The release's targets and cache keys (release.yml).
         target:
           - {os: darwin, arch: x86_64, key: x86_64, runner: macos-15-intel}
@@ -102,7 +102,9 @@ jobs:
         with:
           name: catalog-php-${{ matrix.php }}-${{ matrix.target.key }}
           path: dist/ext-*.tar.gz
-          if-no-files-found: error
+          # build-ext.sh fails on a broken recipe; no archive at all means every recipe it was given
+          # sets SKIP for this PHP version (e.g. memcached for 8.6).
+          if-no-files-found: warn
 
   publish:
     # A merged recipe change ships with the next release; start it now.

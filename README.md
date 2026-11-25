@@ -2,7 +2,7 @@
 
 Prebuilt binaries for **[Devid](https://devid.bekenweb.com)**, a local development environment for Laravel, PHP and Node.js on Macs (Intel or Apple silicon) and on Linux (Ubuntu and Arch, x86_64):
 - `devid` itself (the CLI, TUI and daemon), and the Devid desktop app for macOS;
-- static PHP 8.3 / 8.4 / 8.5 (php + php-fpm, with Xdebug and pcov as loadable `.so` files);
+- static PHP 8.3 / 8.4 / 8.5 / 8.6 (php + php-fpm, with Xdebug and pcov as loadable `.so` files);
 - a catalog of extra PHP extensions built against them;
 - nginx, and the official Caddy and Mailpit builds, mirrored unmodified.
 
@@ -80,12 +80,14 @@ In `manifest.json`, macOS builds are under the arch keys `x86_64` and `arm64`, a
 
 The PHP builds include these extensions: bcmath, ctype, curl, dom, exif, fileinfo, filter, gd, iconv, intl, mbstring, mysqli, opcache, openssl, pcntl, pdo, pdo_mysql, pdo_pgsql, pdo_sqlite, pgsql, phar, posix, readline, redis, session, simplexml, soap, sockets, sodium, sqlite3, tokenizer, xml, xmlreader, xmlwriter, zip, zlib.
 
+**PHP 8.6** (Devid D-062) is newer than static-php-cli 2.8.5 and than the stable releases of Xdebug, pcov and phpredis. Until they support it, 8.6 is built with Xdebug 3.6.0alpha1, phpredis 6.4.0RC1 and pcov from the commit that fixes 8.6 ([krakjoe/pcov#134](https://github.com/krakjoe/pcov/pull/134)), plus the two configure fixes from static-php-cli's v3 branch ([#1226](https://github.com/crazywhalecc/static-php-cli/pull/1226)): `--enable-pic` instead of `--with-pic`, and `<locale>` before `php.h` in C++ sources. Each one goes once its project releases 8.6 support (`CUSTOM_URLS` in `scripts/build-php.sh`).
+
 ### Extension catalog
 
 | Extension | Version | Notes |
 |---|---|---|
 | apcu | 5.1.28 | |
-| igbinary | 3.2.16; 3.2.17RC1 for PHP 8.5 | 3.2.17RC1 is the only release that supports PHP 8.5 |
+| igbinary | 3.2.16; 3.2.17RC1 for PHP 8.5 | 3.2.17RC1 is the only release that supports PHP 8.5; none for PHP 8.6 yet |
 | memcached | 3.4.0 | libmemcached built in; PHP and JSON serializers and the session handler, without the igbinary and msgpack serializers (no load-order dependency) |
 | mongodb | 2.5.6 | carries its own static OpenSSL; TLS to a server with a Devid certificate needs `tlsCAFile` |
 | msgpack | 3.0.1 | |
@@ -95,8 +97,10 @@ The PHP builds include these extensions: bcmath, ctype, curl, dom, exif, fileinf
 
 Each extension is a recipe in `extensions/<name>.sh`: the upstream release with a pinned SHA-256, its configure options and a smoke test.
 
+**For PHP 8.6** the catalog has apcu, imagick, ldap and mongodb. igbinary, memcached, msgpack and swoole follow once a release of theirs supports 8.6: until then their recipes set `SKIP` for it, and `build-ext.sh` builds nothing for them. The 8.6 builds include `extensions/php-8.6-compat.h`, which restores aliases that PHP 8.6 removed (`XtOffsetOf`, `zval_dtor`, `INI_*` and a few more) with their PHP 8.5 definitions, because apcu 5.1.28 and imagick 3.8.1 still use them.
+
 **Adding or updating one** is a pull request with its recipe:
-- `.github/workflows/catalog.yml` builds and tests the changed recipes for PHP 8.3, 8.4 and 8.5 with `build-ext.sh`'s checks, publishing nothing. It reads the release cache but never writes it, and it uses the PHP in that cache (`REUSE_PHP=1`) instead of building PHP again, unless the pull request changes how PHP is built or a manual run sets `build_php`.
+- `.github/workflows/catalog.yml` builds and tests the changed recipes for PHP 8.3 to 8.6 with `build-ext.sh`'s checks, publishing nothing. It reads the release cache but never writes it, and it uses the PHP in that cache (`REUSE_PHP=1`) instead of building PHP again, unless the pull request changes how PHP is built or a manual run sets `build_php`.
 - Once the PR is merged, the same workflow starts "Build and release", so the extension ships without a Devid release.
 - `workflow_dispatch` builds named recipes on demand.
 
@@ -146,7 +150,7 @@ On Linux, `scripts/check-linux.sh` replaces the macOS link checks: every binary 
 
 ## Updates
 
-`.github/workflows/check-upstream.yml` runs every Monday (08:00 Asia/Jakarta). It compares the newest PHP 8.3/8.4/8.5 (php.net), nginx stable (even minor), Caddy and Mailpit with `runtime-latest`'s `manifest.json`, and starts a new build when anything is newer. The build scripts pick those same newest versions unless `NGINX_VER` / `CADDY_VER` / `MAILPIT_VER` are pinned. On a Mac with Devid, `devid update` then installs the new versions.
+`.github/workflows/check-upstream.yml` runs every Monday (08:00 Asia/Jakarta). It compares the newest PHP 8.3 to 8.6 (php.net), nginx stable (even minor), Caddy and Mailpit with `runtime-latest`'s `manifest.json`, and starts a new build when anything is newer. The build scripts pick those same newest versions unless `NGINX_VER` / `CADDY_VER` / `MAILPIT_VER` are pinned. On a Mac with Devid, `devid update` then installs the new versions.
 
 ## Licenses
 

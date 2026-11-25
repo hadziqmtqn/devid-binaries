@@ -19,8 +19,22 @@ OS="$(uname -s | tr '[:upper:]' '[:lower:]')"   # darwin or linux
 EXT="bcmath,ctype,curl,dom,exif,fileinfo,filter,gd,iconv,intl,mbstring,mysqli,opcache,openssl,pcntl,pdo,pdo_mysql,pdo_pgsql,pdo_sqlite,pgsql,phar,posix,readline,redis,session,simplexml,soap,sockets,sodium,sqlite3,tokenizer,xml,xmlreader,xmlwriter,zip,zlib"
 # Loaded on demand as .so files (Devid D-008), not compiled in.
 SHARED="xdebug,pcov"
-# Pin a stable Xdebug; spc's default source picked an alpha.
-XDEBUG_URL="https://pecl.php.net/get/xdebug-3.5.3.tgz"
+# Sources spc downloads from these URLs instead of its own (spc download --custom-url). Pin a
+# stable Xdebug; spc's default source picked an alpha.
+CUSTOM_URLS=("xdebug:https://pecl.php.net/get/xdebug-3.5.3.tgz")
+# PHP 8.6 (Devid D-062) is newer than static-php-cli 2.8.5 and than the stable releases of three
+# sources, so it gets the first versions that build against it. Drop each one once its project
+# releases 8.6 support.
+if [ "$PHP_VER" = 8.6 ]; then
+  CUSTOM_URLS=(
+    # Xdebug 3.5 refuses PHP 8.6. 3.6.0alpha1 is a GitHub tag only, not on PECL.
+    "xdebug:https://github.com/xdebug/xdebug/archive/refs/tags/3.6.0alpha1.tar.gz"
+    # phpredis is compiled in; 6.3.0 does not build (8.6 passes the session save_path as a zend_string).
+    "redis:https://pecl.php.net/get/redis-6.4.0RC1.tgz"
+    # pcov 1.0.12 uses the INI_* macros 8.6 removed; the fix is merged (krakjoe/pcov#134), not released.
+    "pcov:https://github.com/krakjoe/pcov/archive/c96a5742073e1c42e1d519f5b64bcfce28b1c644.tar.gz"
+  )
+fi
 # Compiled-in ini paths must not point at Homebrew's /usr/local/etc/php; Devid sets PHPRC anyway.
 INI_DIR=/opt/devid/etc/php
 # Linux (Devid Phase 12 L1): glibc, so the .so files load (a static musl PHP cannot load any), and
@@ -50,6 +64,19 @@ case "$OS" in
   *) echo "FAIL: unsupported OS $OS" >&2; exit 1 ;;
 esac
 
+if [ "$PHP_VER" = 8.6 ]; then
+  # spc's configure command for PHP (its config/env.ini; the environment overrides it), with the two
+  # fixes spc's unreleased v3 branch makes for 8.6 (crazywhalecc/static-php-cli#1226): 8.6 rejects
+  # --with-pic (passed on Linux) in favour of --enable-pic, and C++ sources include <locale> first,
+  # because php.h defines vsnprintf as ap_php_vsnprintf, which breaks libc++'s <locale> in ext/intl.
+  # CXXFLAGS keeps configure's default -g -O2.
+  case "$OS" in
+    darwin) cfg="--enable-shared=no --enable-static=yes" ;;
+    linux) cfg="--disable-shared --enable-static --enable-pic" ;;
+  esac
+  export SPC_CMD_PREFIX_PHP_CONFIGURE="./configure --prefix= --with-valgrind=no $cfg --disable-all --disable-phpdbg 'CXXFLAGS=-g -O2 -include locale'"
+fi
+
 ./spc doctor --auto-fix
 
 # Catalog checks of a recipe (catalog.yml) need a PHP to build and load extensions against, not a
@@ -67,8 +94,10 @@ if [ "${REUSE_PHP:-}" = 1 ] && [ -x buildroot/bin/php ] && [ -x buildroot/bin/ph
   echo "The build root holds PHP $FULL, not $PHP_VER: building it"
 fi
 
+custom=()
+for u in "${CUSTOM_URLS[@]}"; do custom+=(--custom-url="$u"); done
 ./spc download --with-php="$PHP_VER" --for-extensions="$EXT,$SHARED" \
-  --custom-url="xdebug:$XDEBUG_URL" --ignore-cache-sources=php-src,xdebug --retry=3
+  "${custom[@]}" --ignore-cache-sources=php-src,xdebug --retry=3
 ./spc build "$EXT" --build-cli --build-fpm --build-shared="$SHARED" \
   --with-config-file-path="$INI_DIR" --with-config-file-scan-dir="$INI_DIR/conf.d"
 
@@ -103,6 +132,10 @@ version="$("$STAGE/php" -n -d zend_extension="$STAGE/modules/xdebug.so" -v)"
 grep -q Xdebug <<<"$version" || { echo "FAIL: xdebug.so does not load" >&2; exit 1; }
 version="$("$STAGE/php-fpm" -n -d zend_extension="$STAGE/modules/xdebug.so" -m)"
 grep -qx Xdebug <<<"$version" || { echo "FAIL: xdebug.so does not load in php-fpm" >&2; exit 1; }
+for bin in php php-fpm; do
+  version="$("$STAGE/$bin" -n -d extension="$STAGE/modules/pcov.so" -m)"
+  grep -qx pcov <<<"$version" || { echo "FAIL: pcov.so does not load in $bin" >&2; exit 1; }
+done
 modules="$("$STAGE/php" -n -m)"
 for ext in pdo_pgsql pdo_sqlite intl gd redis sodium zip bcmath mysqli readline soap; do
   grep -qx "$ext" <<<"$modules" || { echo "FAIL: missing extension $ext" >&2; exit 1; }
@@ -115,13 +148,18 @@ else
   zig="$(find "$WORK/pkgroot" -type f -name zig -perm -u+x | head -1)"
   min="glibc_min $GLIBC_MIN ($SPC_TARGET, zig $("$zig" version))" host="$(. /etc/os-release && echo "$PRETTY_NAME")"
 fi
+# The versions that were built, as the extensions report them (8.6 pins its own, see CUSTOM_URLS).
+xdebug="$("$STAGE/php" -n -d zend_extension="$STAGE/modules/xdebug.so" -r 'echo phpversion("xdebug");')"
+pcov="$("$STAGE/php" -n -d extension="$STAGE/modules/pcov.so" -r 'echo phpversion("pcov");')"
+redis="$("$STAGE/php" -n -r 'echo phpversion("redis");')"
 {
   echo "php $FULL"
   echo "arch $ARCH"
   echo "$min"
   echo "static-php-cli $(./spc --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
   echo "extensions $EXT"
-  echo "shared $SHARED (xdebug 3.5.3)"
+  echo "shared $SHARED (xdebug $xdebug, pcov $pcov)"
+  echo "redis $redis"
   echo "built $(date -u +%Y-%m-%dT%H:%M:%SZ) on $host"
 } > "$STAGE/BUILDINFO"
 
