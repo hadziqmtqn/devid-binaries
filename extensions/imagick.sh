@@ -60,7 +60,31 @@ build_imagemagick() {
   echo "$want" > "$stamp"
 }
 
+# libde265 1.1 picks its AVX2 and AVX-512 kernels with __builtin_cpu_supports, which reads the CPU
+# table (__cpu_model, filled by __cpu_indicator_init) of libgcc or compiler-rt. zig's runtime has
+# neither, so on Linux ImageMagick's utilities/magick failed to link. Those two kernel sets go off;
+# the SSE4.1 kernels check the CPU with cpuid and stay. static-php-cli's v3 branch turns all of
+# libde265's SIMD off for the same error. spc builds from the source it extracted, so the option
+# changes between its extract and its build. A cached build root has the library already.
+libde265_without_avx() {
+  local src="$WORK/source/libde265" opt
+  [ "$OS" = linux ] && [ ! -f "$BR/lib/libde265.a" ] || return 0
+  (cd "$WORK" && run spc-download-libde265 ./spc download libde265 --retry=3 &&
+    run spc-extract-libde265 ./spc extract libde265) || return 1
+  grep -q __builtin_cpu_supports "$src/libde265/x86/sse.cc" 2>/dev/null || return 0
+  for opt in ENABLE_AVX2 ENABLE_AVX512; do
+    sed -E "s/^(option\($opt .*)ON\)$/\1OFF)/" "$src/CMakeLists.txt" > "$src/CMakeLists.txt.devid"
+    mv "$src/CMakeLists.txt.devid" "$src/CMakeLists.txt"
+    grep -qE "^option\($opt .*OFF\)$" "$src/CMakeLists.txt" || {
+      echo "FAIL: libde265 calls __builtin_cpu_supports, which zig cannot link, and has no $opt option to turn off" >&2
+      return 1
+    }
+  done
+  echo "imagick: libde265 without its AVX2 and AVX-512 kernels (zig cannot link __builtin_cpu_supports)"
+}
+
 prepare() {
+  libde265_without_avx
   spc_libs "$IM_LIBS"
   build_imagemagick
   ARGS+=(--with-imagick="$BR" "LIBS=$(pkg-config --static --libs MagickWand)")
