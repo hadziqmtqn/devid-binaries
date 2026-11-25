@@ -1,4 +1,6 @@
 # apcu: in-memory user cache (Symfony, Drupal, Yii, CakePHP). No C library. Devid E1: passed.
+# PHP 8.6 (Devid D-062): not until a release supports it.
+[ "$PHP_VER" != 8.6 ] || SKIP="5.1.28 predates PHP 8.6, which dropped php_verror()'s params argument; the fix (krakjoe/apcu@90899684) is not released yet"
 VERSION=5.1.28
 URL="https://pecl.php.net/get/apcu-$VERSION.tgz"
 SHA256=ca9c1820810a168786f8048a4c3f8c9e3fd941407ad1553259fb2e30b5f057bf
