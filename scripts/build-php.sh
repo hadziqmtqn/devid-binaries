@@ -103,8 +103,15 @@ custom=()
 for u in "${CUSTOM_URLS[@]}"; do custom+=(--custom-url="$u"); done
 ./spc download --with-php="$PHP_VER" --for-extensions="$EXT,$SHARED" \
   "${custom[@]}" --ignore-cache-sources=php-src,xdebug --retry=3
-./spc build "$EXT" --build-cli --build-fpm --build-shared="$SHARED" \
-  --with-config-file-path="$INI_DIR" --with-config-file-scan-dir="$INI_DIR/conf.d"
+if ! ./spc build "$EXT" --build-cli --build-fpm --build-shared="$SHARED" \
+  --with-config-file-path="$INI_DIR" --with-config-file-scan-dir="$INI_DIR/conf.d"; then
+  # spc names only the command that failed; the compiler's messages are in its shell log.
+  echo "--- errors in spc's shell log (log/spc.shell.log)" >&2
+  grep -n -E 'error:|Error [0-9]+|undefined reference|ld(\.lld)?: ' log/spc.shell.log | tail -40 >&2 || true
+  echo "--- the end of spc's shell log" >&2
+  tail -n 60 log/spc.shell.log >&2 || true
+  exit 1
+fi
 
 FULL="$(buildroot/bin/php -n -r 'echo PHP_VERSION;')"
 NAME="php-$FULL-$OS-$ARCH"

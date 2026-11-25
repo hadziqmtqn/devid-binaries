@@ -1,8 +1,8 @@
 /* Aliases that PHP 8.6 removed, with the definitions PHP 8.5 had (Devid D-062). build-ext.sh
- * includes this file in every extension it builds for PHP 8.6, because the newest releases of
- * some recipes (apcu 5.1.28, imagick 3.8.1) still use them. static-php-cli's v3 branch restores
- * the same list (crazywhalecc/static-php-cli#1226). Each one only renames an API that 8.6 still
- * has; drop an alias once no recipe's release needs it. */
+ * includes this file in every extension it builds for PHP 8.6, because the newest release of a
+ * recipe may still use them (imagick 3.8.1 uses XtOffsetOf and zval_dtor). static-php-cli's v3
+ * branch restores the same list (crazywhalecc/static-php-cli#1226). Each one only renames an API
+ * that 8.6 still has; drop an alias once no recipe's release needs it. */
 #ifndef DEVID_PHP86_COMPAT_H
 #define DEVID_PHP86_COMPAT_H
 

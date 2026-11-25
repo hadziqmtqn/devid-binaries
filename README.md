@@ -97,7 +97,7 @@ The PHP builds include these extensions: bcmath, ctype, curl, dom, exif, fileinf
 
 Each extension is a recipe in `extensions/<name>.sh`: the upstream release with a pinned SHA-256, its configure options and a smoke test.
 
-**For PHP 8.6** the catalog has apcu, imagick, ldap and mongodb. igbinary, memcached, msgpack and swoole follow once a release of theirs supports 8.6: until then their recipes set `SKIP` for it, and `build-ext.sh` builds nothing for them. The 8.6 builds include `extensions/php-8.6-compat.h`, which restores aliases that PHP 8.6 removed (`XtOffsetOf`, `zval_dtor`, `INI_*` and a few more) with their PHP 8.5 definitions, because apcu 5.1.28 and imagick 3.8.1 still use them.
+**For PHP 8.6** the catalog has imagick, ldap and mongodb. apcu, igbinary, memcached, msgpack and swoole follow once a release of theirs supports 8.6: until then their recipes set `SKIP` for it, and `build-ext.sh` builds nothing for them. The 8.6 builds include `extensions/php-8.6-compat.h`, which restores aliases that PHP 8.6 removed (`XtOffsetOf`, `zval_dtor`, `INI_*` and a few more) with their PHP 8.5 definitions, because imagick 3.8.1 still uses them.
 
 **Adding or updating one** is a pull request with its recipe:
 - `.github/workflows/catalog.yml` builds and tests the changed recipes for PHP 8.3 to 8.6 with `build-ext.sh`'s checks, publishing nothing. It reads the release cache but never writes it, and it uses the PHP in that cache (`REUSE_PHP=1`) instead of building PHP again, unless the pull request changes how PHP is built or a manual run sets `build_php`.
