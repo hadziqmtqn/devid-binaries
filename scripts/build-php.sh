@@ -71,10 +71,15 @@ if [ "$PHP_VER" = 8.6 ]; then
   # because php.h defines vsnprintf as ap_php_vsnprintf, which breaks libc++'s <locale> in ext/intl.
   # CXXFLAGS keeps configure's default -g -O2.
   case "$OS" in
-    darwin) cfg="--enable-shared=no --enable-static=yes" ;;
-    linux) cfg="--disable-shared --enable-static --enable-pic" ;;
+    darwin) cfg="--enable-shared=no --enable-static=yes" micro=macos_iconv_84 ;;
+    linux) cfg="--disable-shared --enable-static --enable-pic" micro=disable_huge_page_84 ;;
   esac
   export SPC_CMD_PREFIX_PHP_CONFIGURE="./configure --prefix= --with-valgrind=no $cfg --disable-all --disable-phpdbg 'CXXFLAGS=-g -O2 -include locale'"
+  # spc applies phpmicro's patches to php-src on every build (SPC_MICRO_PATCHES), each in its newest
+  # version up to the PHP version. Its version list ends at 8.5, so for 8.6 it took the 8.0 patches,
+  # which do not apply. 8.6 gets by name what 8.5 gets (the 8.4 versions apply to 8.6 as they are),
+  # without cli_checks, which only matters for the micro SAPI.
+  export SPC_MICRO_PATCHES="$micro"
 fi
 
 ./spc doctor --auto-fix
