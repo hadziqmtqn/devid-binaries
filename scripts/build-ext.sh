@@ -46,6 +46,9 @@ else
   MAKE_ARGS=("EXTRA_LDFLAGS=-Wl,-z,nodelete -Wl,-Bsymbolic")
   JOBS="$(nproc)"
 fi
+# PHP 8.6 removed aliases that the newest releases of some recipes still use; every extension built
+# for it gets them back (Devid D-062).
+[ "$PHP_VER" != 8.6 ] || BUILD_ENV+=("CPPFLAGS=-include $RECIPES/php-8.6-compat.h")
 
 FULL="$(php-config --version)"
 [ "${FULL%.*}" = "$PHP_VER" ] || { echo "FAIL: the build root holds PHP $FULL, not $PHP_VER; run build-php.sh first" >&2; exit 1; }
@@ -114,12 +117,17 @@ build_one() {
   #   INI, SMOKE            -d options and PHP code for the smoke test; check($ok, $what) is defined
   #   prepare()             runs before configure (build libraries)
   #   stage_extra()         adds files to $STAGE
-  VERSION="" URL="" SHA256="" TYPE=extension LICENSE="" SPC_LICENSES="" ENV_JSON='{}' SMOKE=""
+  #   SKIP                  why this PHP version gets no build; the recipe stays out of its catalog
+  VERSION="" URL="" SHA256="" TYPE=extension LICENSE="" SPC_LICENSES="" ENV_JSON='{}' SMOKE="" SKIP=""
   LICENSE_FILES=(LICENSE) ARGS=() INI=()
   prepare() { :; }
   stage_extra() { :; }
   # shellcheck source=/dev/null
   source "$RECIPES/$NAME.sh"
+  if [ -n "$SKIP" ]; then
+    echo "skip: $NAME for PHP $PHP_VER: $SKIP"
+    return 0
+  fi
 
   SRC="$WORK/ext/src/$NAME"
   rm -rf "$SRC"

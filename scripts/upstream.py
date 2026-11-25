@@ -29,7 +29,7 @@ import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-PHP_MINORS = ["8.3", "8.4", "8.5"]  # Devid D-009
+PHP_MINORS = ["8.3", "8.4", "8.5", "8.6"]  # Devid D-009, D-062
 TOOLS = ["nginx", "caddy", "mailpit"]  # one version each, for every PHP minor
 
 
@@ -212,6 +212,8 @@ def self_test():
                                     ("mailpit", "0.0.0", "1.33.1")]
     assert behind({**manifest, "mailpit": {"version": "1.33.1"}}, {"mailpit": "1.33.1"}) == []
     assert behind(manifest, {"php-8.4": "8.4.27", "nginx": "1.30.6"}) == []
+    # A new minor (8.6, Devid D-062) is behind until a release ships it.
+    assert behind(manifest, {"php-8.6": "8.6.0"}) == [("php 8.6", "0.0.0", "8.6.0")]
     hexd = "d8ca2a9da16c977189f2514a7fc28f8a47fe050bd2b0296a13c815288b5fe39f"
     release = {"assets": [{"name": "mailpit-darwin-arm64.tar.gz", "digest": "sha256:" + "0" * 64},
                           {"name": "mailpit-darwin-amd64.tar.gz", "digest": "sha256:" + hexd}]}

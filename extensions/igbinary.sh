@@ -1,6 +1,8 @@
 # igbinary: a compact replacement for PHP's serializer (Laravel's Redis and cache serializer option;
 # Sail). No C library. 3.2.16 is the last stable release. Support for PHP 8.5 exists only in
 # 3.2.17RC1 (a pre-release on GitHub, the newest on PECL and PIE), so PHP 8.5 gets that one.
+# PHP 8.6 (Devid D-062): not until a release supports it.
+[ "$PHP_VER" != 8.6 ] || SKIP="every release predates PHP 8.6, which made unserialize_callback_func a zend_string; the fix (igbinary/igbinary@d4a6ded9) is not released yet"
 if [ "$PHP_VER" = 8.5 ]; then
   VERSION=3.2.17RC1 SHA256=91da821443db125282a6aea039f24588dd28ff5d71e8187f6ecc41165bceafbc
 else

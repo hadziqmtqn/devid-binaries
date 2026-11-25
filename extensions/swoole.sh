@@ -1,6 +1,8 @@
 # swoole: coroutine runtime and servers for the CLI (Laravel Octane with Swoole; Sail). C++, with TLS
 # (the build root's OpenSSL, linked in), HTTP/2, brotli, async DNS (c-ares) and the coroutine curl
 # hook. It does not change how php-fpm serves .test sites.
+# PHP 8.6 (Devid D-062): not until a release supports it.
+[ "$PHP_VER" != 8.6 ] || SKIP="no release supports PHP 8.6 yet; swoole 6.2 and 6.3 declare PHP 8.2 to 8.5"
 VERSION=6.2.4
 URL="https://pecl.php.net/get/swoole-$VERSION.tgz"
 SHA256=cb41348708cb3a360672cd4ffe84b9a6b4efee61773be7d76a11c39949b95334
