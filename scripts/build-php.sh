@@ -72,7 +72,7 @@ if [ "$PHP_VER" = 8.6 ]; then
   # CXXFLAGS keeps configure's default -g -O2.
   # Linux: 8.6's new poll API calls epoll_pwait2 when configure finds it, and a declaration is
   # enough for configure (build/php.m4). zig's glibc headers declare it, but glibc 2.17 has no such
-  # symbol (it came in 2.35), so php did not link. Autoconf's cached answers make it use epoll_pwait.
+  # symbol (it came in 2.35), so php did not link. Autoconf's cached answers make it use epoll_wait.
   case "$OS" in
     darwin) cfg="--enable-shared=no --enable-static=yes" micro=macos_iconv_84 ;;
     linux)
