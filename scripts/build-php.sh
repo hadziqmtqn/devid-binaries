@@ -70,9 +70,15 @@ if [ "$PHP_VER" = 8.6 ]; then
   # --with-pic (passed on Linux) in favour of --enable-pic, and C++ sources include <locale> first,
   # because php.h defines vsnprintf as ap_php_vsnprintf, which breaks libc++'s <locale> in ext/intl.
   # CXXFLAGS keeps configure's default -g -O2.
+  # Linux: 8.6's new poll API calls epoll_pwait2 when configure finds it, and a declaration is
+  # enough for configure (build/php.m4). zig's glibc headers declare it, but glibc 2.17 has no such
+  # symbol (it came in 2.35), so php did not link. Autoconf's cached answers make it use epoll_pwait.
   case "$OS" in
     darwin) cfg="--enable-shared=no --enable-static=yes" micro=macos_iconv_84 ;;
-    linux) cfg="--disable-shared --enable-static --enable-pic" micro=disable_huge_page_84 ;;
+    linux)
+      cfg="--disable-shared --enable-static --enable-pic ac_cv_func_epoll_pwait2=no ac_cv_have_decl_epoll_pwait2=no"
+      micro=disable_huge_page_84
+      ;;
   esac
   export SPC_CMD_PREFIX_PHP_CONFIGURE="./configure --prefix= --with-valgrind=no $cfg --disable-all --disable-phpdbg 'CXXFLAGS=-g -O2 -include locale'"
   # spc applies phpmicro's patches to php-src on every build (SPC_MICRO_PATCHES), each in its newest
